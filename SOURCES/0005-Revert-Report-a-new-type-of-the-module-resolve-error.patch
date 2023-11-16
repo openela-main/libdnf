@@ -1,0 +1,89 @@
+From ce301450c39ebbd9fc5ec0897af2df766015e1bd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Sun, 25 Apr 2021 19:47:53 +0200
+Subject: [PATCH 05/19] Revert "Report a new type of the module resolve error"
+
+This reverts commit 9235436672fa413d5ac94f52a534b5abe90b5c7f.
+---
+ libdnf/dnf-context.cpp                   |  4 ----
+ libdnf/module/ModulePackageContainer.cpp | 17 ++++++++++++-----
+ libdnf/module/ModulePackageContainer.hpp | 10 ++++------
+ 3 files changed, 16 insertions(+), 15 deletions(-)
+
+diff --git a/libdnf/dnf-context.cpp b/libdnf/dnf-context.cpp
+index ccb6fe83..55af2b26 100644
+--- a/libdnf/dnf-context.cpp
++++ b/libdnf/dnf-context.cpp
+@@ -3252,10 +3252,6 @@ report_problems(const std::vector<std::tuple<libdnf::ModulePackageContainer::Mod
+             case libdnf::ModulePackageContainer::ModuleErrorType::ERROR_IN_DEFAULTS:
+                 logger->warning(tfm::format(_("Modular dependency problem with Defaults: %s"), report.c_str()));
+                 break;
+-            case libdnf::ModulePackageContainer::ModuleErrorType::ERROR_IN_LATEST:
+-                logger->warning(tfm::format(_("Modular dependency problem with the lates modules: %s"),
+-                                            report.c_str()));
+-                break;
+             case libdnf::ModulePackageContainer::ModuleErrorType::ERROR:
+                 logger->error(tfm::format(_("Modular dependency problem: %s"), report.c_str()));
+                 return_error = true;
+diff --git a/libdnf/module/ModulePackageContainer.cpp b/libdnf/module/ModulePackageContainer.cpp
+index 1bfdd8c1..ee90056c 100644
+--- a/libdnf/module/ModulePackageContainer.cpp
++++ b/libdnf/module/ModulePackageContainer.cpp
+@@ -725,16 +725,23 @@ ModulePackageContainer::Impl::moduleSolve(const std::vector<ModulePackage *> & m
+                     goal2name_query(goalWeak, query);
+                     activatedModules.reset(new PackageSet(*query.runSet()));
+                 }
+-                return make_pair(problems, problemType);
++            } else {
++                problemType = ModulePackageContainer::ModuleErrorType::ERROR_IN_DEFAULTS;
++                Query query(moduleSack, Query::ExcludeFlags::IGNORE_EXCLUDES);
++                goal2name_query(goal, query);
++                activatedModules.reset(new PackageSet(*query.runSet()));
+             }
+-            problemType = ModulePackageContainer::ModuleErrorType::ERROR_IN_LATEST;
+         } else {
+             problemType = ModulePackageContainer::ModuleErrorType::ERROR_IN_DEFAULTS;
++            Query query(moduleSack, Query::ExcludeFlags::IGNORE_EXCLUDES);
++            goal2name_query(goal, query);
++            activatedModules.reset(new PackageSet(*query.runSet()));
+         }
++    } else {
++        Query query(moduleSack, Query::ExcludeFlags::IGNORE_EXCLUDES);
++        goal2name_query(goal, query);
++        activatedModules.reset(new PackageSet(*query.runSet()));
+     }
+-    Query query(moduleSack, Query::ExcludeFlags::IGNORE_EXCLUDES);
+-    goal2name_query(goal, query);
+-    activatedModules.reset(new PackageSet(*query.runSet()));
+     return make_pair(problems, problemType);
+ }
+ 
+diff --git a/libdnf/module/ModulePackageContainer.hpp b/libdnf/module/ModulePackageContainer.hpp
+index f19c60fd..99fc0677 100644
+--- a/libdnf/module/ModulePackageContainer.hpp
++++ b/libdnf/module/ModulePackageContainer.hpp
+@@ -48,17 +48,15 @@ public:
+     enum class ModuleErrorType {
+         NO_ERROR = 0,
+         INFO,
+-        /// Error in module defaults detected during resolvement of module dependencies
++        /// Error in module defaults detected during resovement of module dependencies
+         ERROR_IN_DEFAULTS,
+-        /// Error detected during resolvement of module dependencies
++        /// Error detected during resovement of module dependencies
+         ERROR,
+-        /// Error detected during resolvement of module dependencies - Unexpected error!!!
++        /// Error detected during resovement of module dependencies - Unexpected error!!!
+         CANNOT_RESOLVE_MODULES,
+         CANNOT_RESOLVE_MODULE_SPEC,
+         CANNOT_ENABLE_MULTIPLE_STREAMS,
+-        CANNOT_MODIFY_MULTIPLE_TIMES_MODULE_STATE,
+-        /// Problem with latest modules during resolvement of module dependencies
+-        ERROR_IN_LATEST
++        CANNOT_MODIFY_MULTIPLE_TIMES_MODULE_STATE
+     };
+     
+     struct Exception : public std::runtime_error
+-- 
+2.31.1
+

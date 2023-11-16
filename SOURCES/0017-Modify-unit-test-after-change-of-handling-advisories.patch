@@ -1,0 +1,274 @@
+From a61b0105aafeea8487902463f789e6ed00021eb3 Mon Sep 17 00:00:00 2001
+From: Jaroslav Mracek <jmracek@redhat.com>
+Date: Wed, 5 May 2021 15:55:43 +0200
+Subject: [PATCH 17/19] Modify unit test after change of handling advisories
+
+The patch modifies also yaml with multicollection situation by adding
+module requires.
+---
+ data/tests/advisories/modules.yaml            |   6 +++++
+ .../tests/advisories/repodata/modules.yaml.gz | Bin 300 -> 332 bytes
+ data/tests/advisories/repodata/primary.xml.gz | Bin 743 -> 743 bytes
+ data/tests/advisories/repodata/repomd.xml     |  24 +++++++++---------
+ tests/libdnf/sack/AdvisoryTest.cpp            |  22 ++++++----------
+ tests/libdnf/sack/QueryTest.cpp               |  24 ++++++++----------
+ 6 files changed, 37 insertions(+), 39 deletions(-)
+
+diff --git a/data/tests/advisories/modules.yaml b/data/tests/advisories/modules.yaml
+index 6db5053a..b5f23f7d 100644
+--- a/data/tests/advisories/modules.yaml
++++ b/data/tests/advisories/modules.yaml
+@@ -32,6 +32,9 @@ data:
+   license:
+     module:
+     - MIT
++  dependencies:
++  - requires:
++      perl: ["5.23"]
+   profiles:
+     default:
+       rpms: ["test-perl-DBI"]
+@@ -52,6 +55,9 @@ data:
+   license:
+     module:
+     - MIT
++  dependencies:
++  - requires:
++      perl: ["5.25"]
+   profiles:
+     default:
+       rpms: ["test-perl-DBI"]
+diff --git a/data/tests/advisories/repodata/modules.yaml.gz b/data/tests/advisories/repodata/modules.yaml.gz
+index 7158e6c515720c87373762d722e9c438ac7fd8d3..ed39532dfcdec084a661d51d86e07bd3e4246f69 100644
+GIT binary patch
+literal 332
+zcmV-S0ki%eiwFP!000001I>{=Ps1<}hWGr6Q`gE7ag#Rnz<^jfATh8ZR2}w3Sc;us
+zJE;77+&V2`Kt&yZ?cV$H`F$8;nd;<V$OZwXQ$tHeWpCuX?yLZwDGVqw0E>nM^yJzo
+zd~k$Dz^uyoVipspfg%do*+9Fv4>2lq@<qU|UT&A=esnMf-MfJMv`UeePWRz3ea&J9
+zj-^&hvYx~tmu^cjgS*W`jC$8Kx+R~oiW(f+kOYA1jX%Z=0{Otk>(K?>pbTUAvvJbK
+zu0;G>$%;HZyrs6DS4GX|H7^S!#q;q?d7fwN0vp-w&1Pz)K_AF{F_TZt<j-f!92b6P
+z=vY2$s-m8(A}e(=mVu+!K|4CRxxZe(<DUJ~g%rkPencX+Mj8d<QxwapUd`9_YK@Jn
+eejSDUe<-TIL$NBWgd)&lisAzcI?AeD1ONa}51~l_
+
+literal 300
+zcmV+{0n`2;iwFP!000001Kp56Ps1<}#rJ%QQ`g85ar4LZz<^jfATh94hka2a*-2zO
+zsC;`&okAE82nhzZd++X^&p*akrbjhf8iE8n>e-Oh*%LY6kAnoBX$&YcfB`K@n8=wZ
+zd~k$T!lo|xb`y=ag)#~?4uMWF4>2lq>L}qPnnP2)uFlq?dzNsYqBMEs`YD{ZuUT~9
+z(lWiG!IM0D>9$lexZ6L(YI0-O8}iB3)ZuJG5&&+p{!%jt<O5r-M;H1IRan~ZgR3!i
+zCF9>JRu<{u0~wLmrQo^XRf(i|v3#j0ij4gLBfGuXuTfg`f!qg}d<~O7egSg{{0!*Q
+y{uQW8_P4;s(FnI>d`-5gMVs$LyTi`ae@<5YXR>WoC$fRIYqBpd!@UUm0{{Tgm5(X_
+
+diff --git a/data/tests/advisories/repodata/primary.xml.gz b/data/tests/advisories/repodata/primary.xml.gz
+index da9ffaf08328659c47be8721a9c478ff64ba0a4d..96cbaa2a5a2361b1e5cd59ddb7de937339982c5f 100644
+GIT binary patch
+literal 743
+zcmV<D0vP=tiwFP!000001Lao9Zrd;rz2_?ko>~O9B%0I`ND2@%1#&3RBI%*0fTBhg
+zVQr-(BktFi)Dqj>k`zsgpnzeM!#6X0Z#V;o=XYg+wxC*BR}prWHbzj1I+fKr!XIzm
+zE_{3*pM)iJJmnon8eX*#&bzKTv#df^{oOL{H?V}Xw`P<j>awgWJfhE3Q$FaSF&H&m
+zZ1@^<e1dh-X^XmD0}(ce_ynP_;w8i#wB4csRV?0IT!q$PGlyJ>JihbYTbG8`urbz&
+zAcCeAd4x4dZP9cwQc&n@%d$@U0&b!3PhIAFr-APUJW~u?gTKf@Y}&q@uF~e5FjwDq
+zvzBRuKV4qqc$Eb!8hEKs2%}j*IQ0ebAY}{^!F=%3#H9{l`Y>@gB?&m5V>{r|AoIZ2
+zx1Ey=8TD_;)o$Ra)1ddG7NIpC7*GnWP_pSXwfN*Fmo3sCj%Hbqah^pDts}Jdo(@zT
+zTK7w1?^U5q=G*K#Spv#rp=moVv3)HJ)zp(-7Mi-ld=@yAIAl_)m0w^^8DZD<DMqqt
+zJ6;r!4$7ON$gK%S=;Tz?f}3lhTtOD$quMT<#m~#L94oyvZ(|IV)vDy3S?Y~8pA}L-
+z)k6I4>L#=f4SUEIs<bvT9BlTdYgPA6e7$QsDA8rLm8z~vs5<L{w=nvQkiE+wPF}ZN
+zY?u{hH3IhsdvII#N`PL)PvG4uVMvcr_Yw9{bKohch2oWNAT7V@B21Z0O?#)NFw`Cu
+zoA8aQw^F~5(KHz~OSMC$x4tO~Mp?nvx=$}Z;NNYkhqJuW)m^ys^`FT$YIV$W$gkjY
+zFV$nH|LP)aIX~w))nVMwnjhwUv;DgP=TSDQ)4}TT1CDdwag)qW1VF|-lF*b;;bZ|1
+zAaQI#T&4p%e8n;rxT^$g0fA4l#Lc{bQ1?X-INM$QwE=fnp8sjU9r1o~1Md5#dd>m&
+ZqioMV;M}JUxcmQi@mJ$x7+z@#006pgY0dxu
+
+literal 743
+zcmV<D0vP=tiwFP!000001LamrZ`&{ozV}xMI&CNtTZ-gIVY@)F4(MUPhIWUY3R$LO
+zBYsV`gJ!>ek{?a7SKDFTPz(qXk^D&NBSj*?`CVC{EvPoHs}Pf=jS*C`PV#CU;*U3P
+z7al&3PJ$9Tk%&$p4X@e|XI<BvSyqu({oOL@H?V}Hw`P<j>$0pXJfhE3Q$FaSF&H&M
+zZp0dNe2R6_NkrYQfe;%+bb?S&i4vj?+HTQ+Di&`pt^#Y&8KY1#i|#z<)?tA)2u3>*
+zM9|bS3$Z4tHJUC)3JRTVS=LEkz%3Nsslz?@)c0Ipq>5u}@Ru3LP1~2#RoYBY?&$k&
+z)_D@*PnXv?TBZJq`EKG-%311D!8}P_NH~XBau2*Db{L^t8)G6Eje)qtCg3nXb-~lO
+zos$e1^=~QEZs4iYp!Z`f0&6xHPy($~dDCfX(aBAgw@7~kn#+QW^IX)xIznsj$)KXZ
+zx<49yuL`X)-$v^45>T2Knl^C=^<0m+ntI&lg{Drp$9=*mp;M*W{0qz}L+scd!zi!X
+zP80<sL*-3V@~sI++2mBzQkZL@OhFprquwsa;^*yIj-6hbw=srFYgLNQ9JQd;XGJcd
+zY9V@ebrV>JialftRZ^QW90+^sTGf3MUGLfsN_1Imb5&O*RGoDpS{Qvs$lhfrPFA;F
+zWSAA^Gy?aAJ-DrVB|)E}C-82SG^EF<`w07}8HfbbLWxQbkS@RKLd>|$%y=iJG0Yw-
+zHsKppZ*%=ZM%AR$EY%K~+4`m_7^Q_+>p8vrfPZ(W9?tSgcX#2i*MBD4SgT{6Lw*IH
+z`&>PS`mZj+m-BO;Qys<)todQy58J<6a4zFxbvjr*e!&Uh5hqUVSOTQnr7=q=lO*+p
+z4>7SNb+`^p#EPffcUCdj5`2%Qv6H$!WzLIUaJIAhYYXnMJ^#~!JL3J~7Totk^_&at
+ZN7<f#!8uP|aQFZ3qOUfbJ%VWp006EqV{!lh
+
+diff --git a/data/tests/advisories/repodata/repomd.xml b/data/tests/advisories/repodata/repomd.xml
+index 21630e04..c9468e82 100644
+--- a/data/tests/advisories/repodata/repomd.xml
++++ b/data/tests/advisories/repodata/repomd.xml
+@@ -1,11 +1,11 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <repomd xmlns="http://linux.duke.edu/metadata/repo" xmlns:rpm="http://linux.duke.edu/metadata/rpm">
+-  <revision>1612879414</revision>
++  <revision>1620890113</revision>
+   <data type="primary">
+-    <checksum type="sha256">b69e4467719314fdb155872cf9c8e895d5b169c0506c5180c512d693c48f0f4b</checksum>
+-    <open-checksum type="sha256">8606d1f777859f167f7bd0bf8a1d532abedcb4db143b719e631e1040800fd1f0</open-checksum>
++    <checksum type="sha256">f2f306a22a157730d2f13f09fc36c425b9bedfc0ecaf74d8b60d98222ebb3274</checksum>
++    <open-checksum type="sha256">ef20a9175429f9f223c4bdcd634fc218bdd85799095438d349efea159cfd2bdf</open-checksum>
+     <location href="repodata/primary.xml.gz"/>
+-    <timestamp>1612879414</timestamp>
++    <timestamp>1620890113</timestamp>
+     <size>743</size>
+     <open-size>2665</open-size>
+   </data>
+@@ -13,7 +13,7 @@
+     <checksum type="sha256">efbf7f021163a3c7698a257351e327102c60bb39a7bdceee77c421f064205e99</checksum>
+     <open-checksum type="sha256">ca5620e2734574d04d3c01ae5a72f865313369954698d71776076b9cbd831bbd</open-checksum>
+     <location href="repodata/filelists.xml.gz"/>
+-    <timestamp>1612879414</timestamp>
++    <timestamp>1620890113</timestamp>
+     <size>311</size>
+     <open-size>511</open-size>
+   </data>
+@@ -21,23 +21,23 @@
+     <checksum type="sha256">6673953e1f28f55b9d4c3f38a9e3c0e0ff88ad06fb693b7f15eb241a81b80d71</checksum>
+     <open-checksum type="sha256">0997c242bf1b96372d7a625a73de23dced68cae9375baff0c73215a07693b3f4</open-checksum>
+     <location href="repodata/other.xml.gz"/>
+-    <timestamp>1612879414</timestamp>
++    <timestamp>1620890113</timestamp>
+     <size>310</size>
+     <open-size>507</open-size>
+   </data>
+   <data type="modules">
+-    <checksum type="sha256">a815d0669b15b97dd6260713405c79045eeda10aedb6460a0f742b86cc236cca</checksum>
+-    <open-checksum type="sha256">0d1063b74e3a7cb4c7cdc3b2080b1901c347693140765534f8c5c3d8b964778a</open-checksum>
++    <checksum type="sha256">df1abc1ab7dacc6ea2bc16c2b14abeb32d0ec9d9ed01378488cec22540f9607b</checksum>
++    <open-checksum type="sha256">f088c4096bfc4acad99a20e06d0d4381872c10f0f27ff8bbfe1bada658ff7afd</open-checksum>
+     <location href="repodata/modules.yaml.gz"/>
+-    <timestamp>1612879414</timestamp>
+-    <size>300</size>
+-    <open-size>1019</open-size>
++    <timestamp>1620890113</timestamp>
++    <size>332</size>
++    <open-size>1117</open-size>
+   </data>
+   <data type="updateinfo">
+     <checksum type="sha256">9d791d16c2adc2d7d4c85b45f2a704edac62a926b09fc20df73207f4190acd49</checksum>
+     <open-checksum type="sha256">3cf7df860860ac7a4a8e64a1a2d71c1ec43225dacbfe09a0cff80f28be3825da</open-checksum>
+     <location href="repodata/updateinfo.xml.gz"/>
+-    <timestamp>1612879414</timestamp>
++    <timestamp>1620890113</timestamp>
+     <size>708</size>
+     <open-size>2414</open-size>
+   </data>
+diff --git a/tests/libdnf/sack/AdvisoryTest.cpp b/tests/libdnf/sack/AdvisoryTest.cpp
+index 805c35da..1abf1a95 100644
+--- a/tests/libdnf/sack/AdvisoryTest.cpp
++++ b/tests/libdnf/sack/AdvisoryTest.cpp
+@@ -97,11 +97,9 @@ void AdvisoryTest::testGetApplicablePackagesModulesNotSetup()
+ 
+     // When modules are not setup all advisory collections are applicable and we get all packages
+     advisory->getApplicablePackages(pkgsvector);
+-    CPPUNIT_ASSERT(pkgsvector.size() == 4);
++    CPPUNIT_ASSERT_EQUAL(2, static_cast<int>(pkgsvector.size()));
+     CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[0].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[1].getNameString(), "test-perl-DBI-new-collection-override"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[2].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[3].getNameString(), "not-present"));
++    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[1].getNameString(), "not-present"));
+ }
+ 
+ void AdvisoryTest::testGetApplicablePackagesModulesSetupNoneEnabled()
+@@ -122,16 +120,14 @@ void AdvisoryTest::testGetApplicablePackagesOneApplicableCollection()
+ {
+     std::vector<libdnf::AdvisoryPkg> pkgsvector;
+ 
+-    // When I keep enabled only perl-DBI module I get packages from all collections that contain that module
++    // When I keep enabled only perl module I get packages from all collections that contain that module
+     libdnf::ModulePackageContainer * modules = dnf_sack_get_module_container(sack);
+-    modules->reset("perl");
++    modules->reset("perl-DBI");
+     dnf_sack_filter_modules_v2(sack, modules, nullptr, tmpdir, nullptr, true, false, false);
+ 
+     advisory->getApplicablePackages(pkgsvector);
+-    CPPUNIT_ASSERT(pkgsvector.size() == 3);
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[0].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[1].getNameString(), "test-perl-DBI-new-collection-override"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[2].getNameString(), "test-perl-DBI"));
++    CPPUNIT_ASSERT(pkgsvector.size() == 1);
++    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[0].getNameString(), "not-present"));
+ }
+ 
+ void AdvisoryTest::testGetApplicablePackagesMultipleApplicableCollections()
+@@ -141,11 +137,9 @@ void AdvisoryTest::testGetApplicablePackagesMultipleApplicableCollections()
+     // When I enable modules from multiple collections -> I get packages from all applicable collections
+     // Enabled - "perl-DBI:master", "perl:5.23"
+     advisory->getApplicablePackages(pkgsvector);
+-    CPPUNIT_ASSERT(pkgsvector.size() == 4);
++    CPPUNIT_ASSERT(pkgsvector.size() == 2);
+     CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[0].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[1].getNameString(), "test-perl-DBI-new-collection-override"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[2].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[3].getNameString(), "not-present"));
++    CPPUNIT_ASSERT(!g_strcmp0(pkgsvector[1].getNameString(), "not-present"));
+ }
+ 
+ void AdvisoryTest::testGetModules()
+diff --git a/tests/libdnf/sack/QueryTest.cpp b/tests/libdnf/sack/QueryTest.cpp
+index 7c3a22af..d4cc28c2 100644
+--- a/tests/libdnf/sack/QueryTest.cpp
++++ b/tests/libdnf/sack/QueryTest.cpp
+@@ -59,12 +59,13 @@ void QueryTest::testQueryGetAdvisoryPkgs()
+     HyQuery query = new libdnf::Query(sack);
+     std::vector<libdnf::AdvisoryPkg> advisoryPkgs;
+ 
+-    // When modules are not setup all advisory collections are applicable
++    // Apply advisory only from active context - receave advisory package only from releted collection
+     query->getAdvisoryPkgs(HY_EQ, advisoryPkgs);
+-    CPPUNIT_ASSERT(advisoryPkgs.size() == 2);
+-    // We get test-perl-DBI twice because its in two collections
+-    CPPUNIT_ASSERT(!g_strcmp0(advisoryPkgs[0].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(advisoryPkgs[1].getNameString(), "test-perl-DBI"));
++    CPPUNIT_ASSERT(advisoryPkgs.size() == 1);
++
++    CPPUNIT_ASSERT_EQUAL(std::string("test-perl-DBI"), std::string(advisoryPkgs[0].getNameString()));
++    CPPUNIT_ASSERT_EQUAL(std::string("1-2.module_el8+6587+9879afr5"), std::string(advisoryPkgs[0].getEVRString()));
++    //CPPUNIT_ASSERT(!g_strcmp0(advisoryPkgs[1].getNameString(), "test-perl-DBI"));
+ 
+     // When modules are setup but none are enabled all collections are not applicable - no enabled module
+     libdnf::ModulePackageContainer * modules = dnf_sack_get_module_container(sack);
+@@ -84,15 +85,15 @@ void QueryTest::testQueryGetAdvisoryPkgs()
+     query->getAdvisoryPkgs(HY_EQ, advisoryPkgs);
+     CPPUNIT_ASSERT(advisoryPkgs.size() == 0);
+ 
+-    // When I enable a module from multiple collections that contain a present package I get them
++    // When I enable a module with multiple collections I will receave advisory packages only for active context
+     CPPUNIT_ASSERT(modules->enable("perl-DBI", "master", false));
+     dnf_sack_filter_modules_v2(sack, modules, nullptr, tmpdir, nullptr, true, false, false);
+ 
+     advisoryPkgs.clear();
+     query->getAdvisoryPkgs(HY_EQ, advisoryPkgs);
+-    CPPUNIT_ASSERT(advisoryPkgs.size() == 2);
+-    CPPUNIT_ASSERT(!g_strcmp0(advisoryPkgs[0].getNameString(), "test-perl-DBI"));
+-    CPPUNIT_ASSERT(!g_strcmp0(advisoryPkgs[1].getNameString(), "test-perl-DBI"));
++    CPPUNIT_ASSERT(advisoryPkgs.size() == 1);
++    CPPUNIT_ASSERT_EQUAL(std::string("test-perl-DBI"), std::string(advisoryPkgs[0].getNameString()));
++    CPPUNIT_ASSERT_EQUAL(std::string("1-2.module_el8+6587+9879afr5"), std::string(advisoryPkgs[0].getEVRString()));
+ 
+     delete query;
+ }
+@@ -102,16 +103,13 @@ void QueryTest::testQueryFilterAdvisory()
+     // When modules are not setup all advisory collections are applicable and there is no modular filtering
+     HyQuery query = new libdnf::Query(sack);
+     query->addFilter(HY_PKG_ADVISORY_TYPE, HY_EQ, "enhancement");
+-    CPPUNIT_ASSERT(query->size() == 2);
++    CPPUNIT_ASSERT(query->size() == 1);
+ 
+     // We get test-perl-DBI twice because its in two collections
+     libdnf::PackageSet pset = *(query->getResultPset());
+     DnfPackage *pkg = dnf_package_new(sack, pset[0]);
+     CPPUNIT_ASSERT(!g_strcmp0(dnf_package_get_name(pkg), "test-perl-DBI"));
+     g_object_unref(pkg);
+-    pkg = dnf_package_new(sack, pset[1]);
+-    CPPUNIT_ASSERT(!g_strcmp0(dnf_package_get_name(pkg), "test-perl-DBI"));
+-    g_object_unref(pkg);
+     delete query;
+ 
+     // When module are setup but none are enabled all collections are not applicable - no enabled module
+-- 
+2.31.1
+

@@ -1,0 +1,26 @@
+From adf159cce65fa5b15f81dd3ee319e551f01def1a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Sun, 25 Apr 2021 19:47:51 +0200
+Subject: [PATCH 03/19] Revert "Fix typo: lates -> latest"
+
+This reverts commit 2a7a315cda61355d60fc0dd0fae9ccd48079a9c5.
+---
+ libdnf/dnf-context.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libdnf/dnf-context.cpp b/libdnf/dnf-context.cpp
+index 926681c2..ccb6fe83 100644
+--- a/libdnf/dnf-context.cpp
++++ b/libdnf/dnf-context.cpp
+@@ -3253,7 +3253,7 @@ report_problems(const std::vector<std::tuple<libdnf::ModulePackageContainer::Mod
+                 logger->warning(tfm::format(_("Modular dependency problem with Defaults: %s"), report.c_str()));
+                 break;
+             case libdnf::ModulePackageContainer::ModuleErrorType::ERROR_IN_LATEST:
+-                logger->warning(tfm::format(_("Modular dependency problem with the latest modules: %s"),
++                logger->warning(tfm::format(_("Modular dependency problem with the lates modules: %s"),
+                                             report.c_str()));
+                 break;
+             case libdnf::ModulePackageContainer::ModuleErrorType::ERROR:
+-- 
+2.31.1
+

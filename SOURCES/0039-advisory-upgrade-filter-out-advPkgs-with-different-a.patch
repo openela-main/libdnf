@@ -1,0 +1,100 @@
+From cf4893a0128c567ed1fdd1b02c9cf2b43bfb02f7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Mon, 30 May 2022 08:59:41 +0200
+Subject: [PATCH] advisory upgrade: filter out advPkgs with different arch
+
+This prevents a situation in security upgrades where libsolv cannot
+upgrade dependent pkgs because we ask for an upgrade of different arch:
+
+We can get the following testcase if libdnf has filtered out
+json-c-2-2.el8.x86_64@rhel-8-for-x86_64-baseos-rpms
+(because there is an advisory for already installed json-c-1-1.el8.x86_64) but
+json-c-2-2.el8.i686@rhel-8-for-x86_64-baseos-rpms is not filtered out because
+it has different architecture. The resulting transaction doesn't work.
+
+```
+repo @System -99.-1000 testtags <inline>
+#>=Pkg: bind-libs-lite 1 1.el8 x86_64
+#>=Pkg: json-c 1 1.el8 x86_64
+
+repo rhel-8-for-x86_64-baseos-rpms -99.-1000 testtags <inline>
+#>=Pkg: json-c 2 2.el8 x86_64
+#>=Prv: libjson-c.so.4()(64bit)
+#>
+#>=Pkg: json-c 2 2.el8 i686
+#>=Prv: libjson-c.so.4()
+#>
+#>=Pkg: bind-libs-lite 2 2.el8 x86_64
+#>=Req: libjson-c.so.4()(64bit)
+system x86_64 rpm @System
+job update oneof json-c-1-1.el8.x86_64@@System json-c-2-2.el8.i686@rhel-8-for-x86_64-baseos-rpms bind-libs-lite-2-2.el8.x86_64@rhel-8-for-x86_64-baseos-rpms [forcebest,targeted,setevr,setarch]
+result transaction,problems <inline>
+#>problem f06d81a4 info package bind-libs-lite-2-2.el8.x86_64 requires libjson-c.so.4()(64bit), but none of the providers can be installed
+#>problem f06d81a4 solution 96f9031b allow bind-libs-lite-1-1.el8.x86_64@@System
+#>problem f06d81a4 solution c8daf94f allow json-c-2-2.el8.x86_64@rhel-8-for-x86_64-baseos-rpms
+#>upgrade bind-libs-lite-1-1.el8.x86_64@@System bind-libs-lite-2-2.el8.x86_64@rhel-8-for-x86_64-baseos-rpms
+#>upgrade json-c-1-1.el8.x86_64@@System json-c-2-2.el8.x86_64@rhel-8-for-x86_64-baseos-rpms```
+```
+
+= changelog =
+msg: Filter out advisory pkgs with different arch during advisory upgrade, fixes possible problems in dependency resulution.
+type: bugfix
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2088149
+---
+ libdnf/sack/query.cpp | 25 +++++++++++++++++++------
+ 1 file changed, 19 insertions(+), 6 deletions(-)
+
+diff --git a/libdnf/sack/query.cpp b/libdnf/sack/query.cpp
+index ac2736b5..03d39659 100644
+--- a/libdnf/sack/query.cpp
++++ b/libdnf/sack/query.cpp
+@@ -1877,12 +1877,6 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+         std::vector<Solvable *> candidates;
+         std::vector<Solvable *> installed_solvables;
+ 
+-        Id id = -1;
+-        while ((id = resultPset->next(id)) != -1) {
+-            candidates.push_back(pool_id2solvable(pool, id));
+-        }
+-        NameArchEVRComparator cmp_key(pool);
+-
+         if (cmp_type & HY_UPGRADE) {
+             Query installed(sack, ExcludeFlags::IGNORE_EXCLUDES);
+             installed.installed();
+@@ -1893,6 +1887,18 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+                 installed_solvables.push_back(pool_id2solvable(pool, installed_id));
+             }
+             std::sort(installed_solvables.begin(), installed_solvables.end(), NameArchSolvableComparator);
++            Id id = -1;
++            while ((id = resultPset->next(id)) != -1) {
++                Solvable * s = pool_id2solvable(pool, id);
++                // When doing HY_UPGRADE consider only candidate pkgs that have matching Name and Arch
++                // with some already installed pkg (in other words: some other version of the pkg is already installed).
++                // Otherwise a pkg with different Arch than installed can end up in upgrade set which is wrong.
++                // It can result in dependency issues, reported as: RhBug:2088149.
++                auto low = std::lower_bound(installed_solvables.begin(), installed_solvables.end(), s, NameArchSolvableComparator);
++                if (low != installed_solvables.end() && s->name == (*low)->name && s->arch == (*low)->arch) {
++                    candidates.push_back(s);
++                }
++            }
+ 
+             // Apply security filters only to packages with lower priority - to unify behaviour upgrade
+             // and upgrade-minimal
+@@ -1915,7 +1921,14 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+                 }
+             }
+             std::swap(candidates, priority_candidates);
++        } else {
++            Id id = -1;
++            while ((id = resultPset->next(id)) != -1) {
++                candidates.push_back(pool_id2solvable(pool, id));
++            }
+         }
++
++        NameArchEVRComparator cmp_key(pool);
+         std::sort(candidates.begin(), candidates.end(), cmp_key);
+         for (auto & advisoryPkg : pkgs) {
+             if (cmp_type & HY_UPGRADE) {
+-- 
+2.36.1
+

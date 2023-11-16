@@ -1,0 +1,35 @@
+From 3a3929a27734aa77c980610a43039cb6b2b6d658 Mon Sep 17 00:00:00 2001
+From: Jan Kolarik <jkolarik@redhat.com>
+Date: Wed, 10 Aug 2022 05:21:38 +0000
+Subject: [PATCH] Fix listing a repository without cpeid (RhBug:2066334)
+
+= changelog =
+type: bugfix
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2066334
+---
+ libdnf/repo/Repo.cpp | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/libdnf/repo/Repo.cpp b/libdnf/repo/Repo.cpp
+index e3a574fb..d61a24a5 100644
+--- a/libdnf/repo/Repo.cpp
++++ b/libdnf/repo/Repo.cpp
+@@ -1021,8 +1021,13 @@ bool Repo::Impl::loadCache(bool throwExcept, bool ignoreMissing)
+     for (auto elem = yum_repomd->distro_tags; elem; elem = g_slist_next(elem)) {
+         if (elem->data) {
+             auto distroTag = static_cast<LrYumDistroTag *>(elem->data);
+-            if (distroTag->tag)
+-                distro_tags.emplace_back(distroTag->cpeid, distroTag->tag);
++            if (distroTag->tag) {
++                std::string cpeid_str;
++                if (distroTag->cpeid) {
++                    cpeid_str = distroTag->cpeid;
++                }
++                distro_tags.emplace_back(std::move(cpeid_str), distroTag->tag);
++            }
+         }
+     }
+ 
+-- 
+2.37.1
+

@@ -1,0 +1,71 @@
+From 652977360c4253faff9e95d35c603b2f585671fe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Tue, 5 Jul 2022 09:02:22 +0200
+Subject: [PATCH] Add obsoletes to filtering for advisory candidates
+
+Patch https://github.com/rpm-software-management/libdnf/pull/1526
+introduced a regression where we no longer do a security upgrade if a
+package A is installed and package B obsoletes A and B is available in two
+versions while there is an advisory for the second version.
+
+Test: https://github.com/rpm-software-management/ci-dnf-stack/pull/1130
+---
+ libdnf/sack/query.cpp | 32 ++++++++++++++++++++++++++++----
+ 1 file changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/libdnf/sack/query.cpp b/libdnf/sack/query.cpp
+index 03d39659..5355f9f7 100644
+--- a/libdnf/sack/query.cpp
++++ b/libdnf/sack/query.cpp
+@@ -1878,6 +1878,13 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+         std::vector<Solvable *> installed_solvables;
+ 
+         if (cmp_type & HY_UPGRADE) {
++            // When doing HY_UPGRADE consider only candidate pkgs that have matching Name and Arch with:
++            // * some already installed pkg (in other words: some other version of the pkg is already installed)
++            // or
++            // * with pkg that obsoletes some already installed (or to be installed in this transaction) pkg
++            // Otherwise a pkg with different Arch than installed can end up in upgrade set which is wrong.
++            // It can result in dependency issues, reported as: RhBug:2088149.
++
+             Query installed(sack, ExcludeFlags::IGNORE_EXCLUDES);
+             installed.installed();
+             installed.addFilter(HY_PKG_LATEST_PER_ARCH, HY_EQ, 1);
+@@ -1887,13 +1894,30 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+                 installed_solvables.push_back(pool_id2solvable(pool, installed_id));
+             }
+             std::sort(installed_solvables.begin(), installed_solvables.end(), NameArchSolvableComparator);
++
++            Query obsoletes(sack, ExcludeFlags::IGNORE_EXCLUDES);
++            obsoletes.addFilter(HY_PKG, HY_EQ, resultPset);
++            obsoletes.available();
++
++            Query possibly_obsoleted(sack, ExcludeFlags::IGNORE_EXCLUDES);
++            possibly_obsoleted.addFilter(HY_PKG, HY_EQ, resultPset);
++            possibly_obsoleted.addFilter(HY_PKG_UPGRADES, HY_EQ, 1);
++            possibly_obsoleted.queryUnion(installed);
++            possibly_obsoleted.apply();
++
++            obsoletes.addFilter(HY_PKG_OBSOLETES, HY_EQ, possibly_obsoleted.runSet());
++            obsoletes.apply();
++            Id obsoleted_id = -1;
++            // Add to candidates resultPset pkgs that obsolete some installed (or to be installed in this transaction) pkg
++            while ((obsoleted_id = obsoletes.pImpl->result->next(obsoleted_id)) != -1) {
++                Solvable * s = pool_id2solvable(pool, obsoleted_id);
++                candidates.push_back(s);
++            }
++
+             Id id = -1;
++            // Add to candidates resultPset pkgs that match name and arch with some already installed pkg
+             while ((id = resultPset->next(id)) != -1) {
+                 Solvable * s = pool_id2solvable(pool, id);
+-                // When doing HY_UPGRADE consider only candidate pkgs that have matching Name and Arch
+-                // with some already installed pkg (in other words: some other version of the pkg is already installed).
+-                // Otherwise a pkg with different Arch than installed can end up in upgrade set which is wrong.
+-                // It can result in dependency issues, reported as: RhBug:2088149.
+                 auto low = std::lower_bound(installed_solvables.begin(), installed_solvables.end(), s, NameArchSolvableComparator);
+                 if (low != installed_solvables.end() && s->name == (*low)->name && s->arch == (*low)->arch) {
+                     candidates.push_back(s);
+-- 
+2.36.1
+

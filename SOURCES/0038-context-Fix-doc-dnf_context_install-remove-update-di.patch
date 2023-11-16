@@ -1,0 +1,62 @@
+From 44d75a36d7c8a933119e5b63f180a8c23715ec51 Mon Sep 17 00:00:00 2001
+From: Jaroslav Rohel <jrohel@redhat.com>
+Date: Mon, 28 Mar 2022 07:51:45 +0200
+Subject: [PATCH] context: Fix doc dnf_context_install/remove/update/distrosync
+
+Functions do not support groups - only packages are supported.
+
+The `dnf_context_remove` function marks all matching packages for removal
+- not just the oldest one.
+---
+ libdnf/dnf-context.cpp | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/libdnf/dnf-context.cpp b/libdnf/dnf-context.cpp
+index 4b055f03..fe005430 100644
+--- a/libdnf/dnf-context.cpp
++++ b/libdnf/dnf-context.cpp
+@@ -2379,7 +2379,7 @@ dnf_context_run(DnfContext *context, GCancellable *cancellable, GError **error)
+ /**
+  * dnf_context_install:
+  * @context: a #DnfContext instance.
+- * @name: A package or group name, e.g. "firefox" or "@gnome-desktop"
++ * @name: A package specification (NEVRA forms, provide, file provide, globs supported) e.g. "firefox"
+  * @error: A #GError or %NULL
+  *
+  * Finds a remote package and marks it to be installed.
+@@ -2422,12 +2422,12 @@ dnf_context_install(DnfContext *context, const gchar *name, GError **error) try
+ /**
+  * dnf_context_remove:
+  * @context: a #DnfContext instance.
+- * @name: A package or group name, e.g. "firefox" or "@gnome-desktop"
++ * @name: A package specification (NEVRA forms, provide, file provide, globs supported) e.g. "firefox"
+  * @error: A #GError or %NULL
+  *
+  * Finds an installed package and marks it to be removed.
+  *
+- * If multiple packages are available then only the oldest package is removed.
++ * If multiple packages are available, all of them will be removed.
+  *
+  * Returns: %TRUE for success, %FALSE otherwise
+  *
+@@ -2470,7 +2470,7 @@ dnf_context_remove(DnfContext *context, const gchar *name, GError **error) try
+ /**
+  * dnf_context_update:
+  * @context: a #DnfContext instance.
+- * @name: A package or group name, e.g. "firefox" or "@gnome-desktop"
++ * @name: A package specification (NEVRA forms, provide, file provide, globs supported) e.g. "firefox"
+  * @error: A #GError or %NULL
+  *
+  * Finds an installed and remote package and marks it to be updated.
+@@ -2548,7 +2548,7 @@ dnf_context_update_all (DnfContext  *context,
+ /**
+  * dnf_context_distrosync:
+  * @context: a #DnfContext instance.
+- * @name: A package or group name, e.g. "firefox" or "@gnome-desktop"
++ * @name: A package specification (NEVRA forms, provide, file provide, globs supported) e.g. "firefox"
+  * @error: A #GError or %NULL
+  *
+  * Finds an installed and remote package and marks it to be synchronized with remote version.
+-- 
+2.36.1
+

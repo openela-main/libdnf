@@ -1,0 +1,34 @@
+From c7f0b13bf32cfba63a2db6257c50ae1ba5c8f9ba Mon Sep 17 00:00:00 2001
+From: Jaroslav Mracek <jmracek@redhat.com>
+Date: Thu, 6 May 2021 11:18:20 +0200
+Subject: [PATCH 18/19] Adjust module error formatting function for original
+ modular solver
+
+The new solver uses libsolv solvable by another way. The revert requires
+also change in formatting function.
+---
+ libdnf/goal/Goal.cpp | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/libdnf/goal/Goal.cpp b/libdnf/goal/Goal.cpp
+index a6f11a4f..6b2f91a2 100644
+--- a/libdnf/goal/Goal.cpp
++++ b/libdnf/goal/Goal.cpp
+@@ -58,12 +58,8 @@ std::string moduleSolvid2str(Pool * pool, Id source)
+ {
+     std::ostringstream ss;
+     auto * solvable = pool_id2solvable(pool, source);
+-    // Add name:stream
+-    ss << solvable_lookup_str(solvable, SOLVABLE_DESCRIPTION);
+-    //Add version
+-    ss << ":" << pool_id2str(pool, solvable->evr);
+-    // Add original context
+-    ss << ":" << solvable_lookup_str(solvable, SOLVABLE_SUMMARY);
++    // Add name:stream:version:context
++    ss << pool_id2str(pool, solvable->name);
+     ss << "." << pool_id2str(pool, solvable->arch);
+     return ss.str();
+ }
+-- 
+2.31.1
+

@@ -1,0 +1,128 @@
+From 876393d5d0cd5f806415dcdc90168e58e66da916 Mon Sep 17 00:00:00 2001
+From: Jaroslav Rohel <jrohel@redhat.com>
+Date: Mon, 28 Mar 2022 07:29:48 +0200
+Subject: [PATCH] context: dnf_context_remove accepts `<package-spec>` as dnf,
+ unify code
+
+Prior to change, the `dnf_context_remove` function only accepted
+the package name (without globs). It was not possible to enter more detailed
+specifications and thus, for example, select a specific version of the package
+to uninstall - for example, which kernel we want to uninstall.
+This patch adds full `<package-spec>` support as in dnf, including support
+for globs (wildcards) and searching against 'provides' and 'file provides'.
+
+Better error handling for `hy_goal_upgrade_selector` in` dnf_context_update`.
+
+Unification of the function code `dnf_context_install`, `dnf_context_remove`,
+`dnf_context_update`.
+
+= changelog =
+msg: context: Support <package-spec> (NEVRA forms, provides, file provides) including globs in the dnf_context_remove func
+type: enhancement
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2084602
+---
+ libdnf/dnf-context.cpp | 46 ++++++++++++++++++++++++------------------
+ 1 file changed, 26 insertions(+), 20 deletions(-)
+
+diff --git a/libdnf/dnf-context.cpp b/libdnf/dnf-context.cpp
+index 6cb0011b..4b055f03 100644
+--- a/libdnf/dnf-context.cpp
++++ b/libdnf/dnf-context.cpp
+@@ -2391,10 +2391,9 @@ dnf_context_run(DnfContext *context, GCancellable *cancellable, GError **error)
+  * Since: 0.1.0
+  **/
+ gboolean
+-dnf_context_install (DnfContext *context, const gchar *name, GError **error) try
++dnf_context_install(DnfContext *context, const gchar *name, GError **error) try
+ {
+     DnfContextPrivate *priv = GET_PRIVATE (context);
+-    g_autoptr(GPtrArray) selector_matches = NULL;
+ 
+     /* create sack and add sources */
+     if (priv->sack == NULL) {
+@@ -2405,7 +2404,7 @@ dnf_context_install (DnfContext *context, const gchar *name, GError **error) try
+ 
+     g_auto(HySubject) subject = hy_subject_create(name);
+     g_auto(HySelector) selector = hy_subject_get_best_selector(subject, priv->sack, NULL, FALSE, NULL);
+-    selector_matches = hy_selector_matches(selector);
++    g_autoptr(GPtrArray) selector_matches = hy_selector_matches(selector);
+     if (selector_matches->len == 0) {
+         g_set_error(error,
+                     DNF_ERROR,
+@@ -2438,31 +2437,33 @@ gboolean
+ dnf_context_remove(DnfContext *context, const gchar *name, GError **error) try
+ {
+     DnfContextPrivate *priv = GET_PRIVATE(context);
+-    GPtrArray *pkglist;
+-    hy_autoquery HyQuery query = NULL;
+-    gboolean ret = TRUE;
+-    guint i;
+ 
+     /* create sack and add repos */
+     if (priv->sack == NULL) {
+         dnf_state_reset(priv->state);
+-        ret = dnf_context_setup_sack(context, priv->state, error);
+-        if (!ret)
++        if (!dnf_context_setup_sack(context, priv->state, error))
+             return FALSE;
+     }
+ 
+-    /* find installed packages to remove */
+-    query = hy_query_create(priv->sack);
+-    query->installed();
+-    hy_query_filter(query, HY_PKG_NAME, HY_EQ, name);
+-    pkglist = hy_query_run(query);
++    libdnf::Query query(priv->sack, libdnf::Query::ExcludeFlags::APPLY_EXCLUDES);
++    query.installed();
++    auto ret = query.filterSubject(name, nullptr, false, true, true, true);
++    if (!ret.first) {
++        g_set_error(error,
++                    DNF_ERROR,
++                    DNF_ERROR_PACKAGE_NOT_FOUND,
++                    "No installed package matches '%s'", name);
++        return FALSE;
++    }
++
++    g_autoptr(GPtrArray) packages = query.run();
+ 
+     /* add each package */
+-    for (i = 0; i < pkglist->len; i++) {
+-        auto pkg = static_cast<DnfPackage *>(g_ptr_array_index(pkglist, i));
++    for (guint i = 0; i < packages->len; i++) {
++        auto pkg = static_cast<DnfPackage *>(g_ptr_array_index(packages, i));
+         hy_goal_erase(priv->goal, pkg);
+     }
+-    g_ptr_array_unref(pkglist);
++
+     return TRUE;
+ } CATCH_TO_GERROR(FALSE)
+ 
+@@ -2493,8 +2494,7 @@ dnf_context_update(DnfContext *context, const gchar *name, GError **error) try
+     }
+ 
+     g_auto(HySubject) subject = hy_subject_create(name);
+-    g_auto(HySelector) selector = hy_subject_get_best_selector(subject, priv->sack, NULL, FALSE,
+-                                                               NULL);
++    g_auto(HySelector) selector = hy_subject_get_best_selector(subject, priv->sack, NULL, FALSE, NULL);
+     g_autoptr(GPtrArray) selector_matches = hy_selector_matches(selector);
+     if (selector_matches->len == 0) {
+         g_set_error(error,
+@@ -2504,8 +2504,14 @@ dnf_context_update(DnfContext *context, const gchar *name, GError **error) try
+         return FALSE;
+     }
+ 
+-    if (hy_goal_upgrade_selector(priv->goal, selector))
++    int ret = hy_goal_upgrade_selector(priv->goal, selector);
++    if (ret != 0) {
++        g_set_error(error,
++                    DNF_ERROR,
++                    ret,
++                    "Ill-formed Selector '%s'", name);
+         return FALSE;
++    }
+ 
+     return TRUE;
+ } CATCH_TO_GERROR(FALSE)
+-- 
+2.36.1
+
