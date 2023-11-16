@@ -1,0 +1,47 @@
+From a5fe0e0eb6457ca51fabe8123d7407951cb8fcba Mon Sep 17 00:00:00 2001
+From: Jaroslav Rohel <jrohel@redhat.com>
+Date: Wed, 24 May 2023 12:35:29 +0200
+Subject: [PATCH] conf: Support "proxy=_none_" in main config (RhBug:2155713)
+
+It has the same meaning as "proxy=". Introduced for compatibility with yum.
+Yum does not support a proxy option with an empty value. Instead, it has
+the special value "_none_". The value "_none_" is case insensitive.
+
+Support for "proxy=_none_" in the repository configuration was added some
+time ago - in commit ea749e6238cdb54fe3b5add67875ab5912d2e766
+
+= changelog =
+msg: Support "proxy=_none_" in main config
+type: enhancement
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2155713
+---
+ libdnf/conf/ConfigMain.cpp | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/libdnf/conf/ConfigMain.cpp b/libdnf/conf/ConfigMain.cpp
+index a6645d70..a775cf8c 100644
+--- a/libdnf/conf/ConfigMain.cpp
++++ b/libdnf/conf/ConfigMain.cpp
+@@ -476,7 +476,18 @@ ConfigMain::Impl::Impl(Config & owner)
+         }, nullptr, true
+     );
+ 
+-    owner.optBinds().add("proxy", proxy);
++    owner.optBinds().add("proxy", proxy,
++        [&](Option::Priority priority, const std::string & value){
++            auto tmpValue(value);
++            for (auto & ch : tmpValue)
++                ch = std::tolower(ch);
++            if (tmpValue == "_none_")
++                proxy.set(priority, "");
++            else
++                proxy.set(priority, value);
++        }, nullptr, false
++    );
++
+     owner.optBinds().add("proxy_username", proxy_username);
+     owner.optBinds().add("proxy_password", proxy_password);
+     owner.optBinds().add("proxy_auth_method", proxy_auth_method);
+-- 
+2.40.1
+

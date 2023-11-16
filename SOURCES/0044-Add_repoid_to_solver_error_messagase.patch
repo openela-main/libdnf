@@ -1,0 +1,317 @@
+From 0e13ac4820e72682b427cfe3cabcfa32561cf631 Mon Sep 17 00:00:00 2001
+From: Jaroslav Mracek <jmracek@redhat.com>
+Date: Fri, 24 Mar 2023 13:22:41 +0100
+Subject: [PATCH] Backport: Split modular packages to to repositories according
+ their origin
+
+It will help to provide information about repository origin to libsolv
+modular error messages.
+---
+ libdnf/module/ModulePackageContainer.cpp | 42 ++++++++++++++----------
+ 1 file changed, 24 insertions(+), 18 deletions(-)
+
+diff --git a/libdnf/module/ModulePackageContainer.cpp b/libdnf/module/ModulePackageContainer.cpp
+index f9f861c1..546d5837 100644
+--- a/libdnf/module/ModulePackageContainer.cpp
++++ b/libdnf/module/ModulePackageContainer.cpp
+@@ -235,13 +235,6 @@ ModulePackageContainer::ModulePackageContainer(bool allArch, std::string install
+         pImpl->persistDir = dir;
+     }
+ 
+-    Pool * pool = dnf_sack_get_pool(pImpl->moduleSack);
+-    HyRepo hrepo = hy_repo_create("available");
+-    auto repoImpl = libdnf::repoGetImpl(hrepo);
+-    LibsolvRepo *repo = repo_create(pool, "available");
+-    repo->appdata = hrepo;
+-    repoImpl->libsolvRepo = repo;
+-    repoImpl->needs_internalizing = 1;
+     pImpl->installRoot = installRoot;
+     g_autofree gchar * path = g_build_filename(pImpl->installRoot.c_str(),
+                                               "/etc/dnf/modules.d", NULL);
+@@ -324,23 +317,36 @@ ModulePackageContainer::add(const std::string &fileContent, const std::string &
+     md.addMetadataFromString(fileContent, 0);
+     md.resolveAddedMetadata();
+ 
++    LibsolvRepo * repo = nullptr;
+     LibsolvRepo * r;
+     Id id;
+ 
++    // Search whether available repo was already created
+     FOR_REPOS(id, r) {
+-        if (strcmp(r->name, "available") == 0) {
+-            g_autofree gchar * path = g_build_filename(pImpl->installRoot.c_str(),
+-                                                      "/etc/dnf/modules.d", NULL);
+-            std::vector<ModulePackage *> packages = md.getAllModulePackages(pImpl->moduleSack, r, repoID);
+-            for(auto const& modulePackagePtr: packages) {
+-                std::unique_ptr<ModulePackage> modulePackage(modulePackagePtr);
+-                pImpl->modules.insert(std::make_pair(modulePackage->getId(), std::move(modulePackage)));
+-                pImpl->persistor->insert(modulePackagePtr->getName(), path);
+-            }
+-
+-            return;
++        if (strcmp(r->name, repoID.c_str()) == 0) {
++            repo = r;
+         }
+     }
++
++    // If not created yet, create it
++    if (!repo) {
++        Pool * pool = dnf_sack_get_pool(pImpl->moduleSack);
++        HyRepo hrepo = hy_repo_create(repoID.c_str());
++        auto repoImpl = libdnf::repoGetImpl(hrepo);
++        repo = repo_create(pool, repoID.c_str());
++        repo->appdata = hrepo;
++        repoImpl->libsolvRepo = repo;
++        repoImpl->needs_internalizing = 1;
++    }
++
++    // add all modules to repository and pass ownership to module container
++    g_autofree gchar * path = g_build_filename(pImpl->installRoot.c_str(), "/etc/dnf/modules.d", NULL);
++    auto packages = md.getAllModulePackages(pImpl->moduleSack, r, repoID);
++    for(auto const& modulePackagePtr: packages) {
++        std::unique_ptr<ModulePackage> modulePackage(modulePackagePtr);
++        pImpl->modules.insert(std::make_pair(modulePackage->getId(), std::move(modulePackage)));
++        pImpl->persistor->insert(modulePackagePtr->getName(), path);
++    }
+ }
+ 
+ Id
+-- 
+2.40.1
+
+
+From dc8a7262f4955160172a32e54eb1db4a644471fa Mon Sep 17 00:00:00 2001
+From: Jaroslav Mracek <jmracek@redhat.com>
+Date: Tue, 21 Mar 2023 11:28:43 +0100
+Subject: [PATCH] Backport: Add repoid to solver errors for RPMs
+ (RhBug:2179413)
+
+Repoid is very useful to find a source of the issue. It tells which
+repositories contains problematic packages.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=2179413
+---
+ libdnf/goal/Goal.cpp                     | 101 +++++++++++++----------
+ libdnf/module/ModulePackageContainer.cpp |   2 +-
+ tests/hawkey/test_goal.cpp               |  14 ++--
+ 3 files changed, 64 insertions(+), 53 deletions(-)
+
+diff --git a/libdnf/goal/Goal.cpp b/libdnf/goal/Goal.cpp
+index 6b2f91a2..b7710303 100644
+--- a/libdnf/goal/Goal.cpp
++++ b/libdnf/goal/Goal.cpp
+@@ -83,8 +83,8 @@ enum {RULE_DISTUPGRADE=1, RULE_INFARCH, RULE_UPDATE, RULE_JOB, RULE_JOB_UNSUPPOR
+ };
+ 
+ static const std::map<int, const char *> PKG_PROBLEMS_DICT = {
+-    {RULE_DISTUPGRADE, M_(" does not belong to a distupgrade repository")},
+-    {RULE_INFARCH, M_(" has inferior architecture")},
++    {RULE_DISTUPGRADE, M_("%s from %s  does not belong to a distupgrade repository")},
++    {RULE_INFARCH, M_("%s from %s  has inferior architecture")},
+     {RULE_UPDATE, M_("problem with installed package ")},
+     {RULE_JOB, M_("conflicting requests")},
+     {RULE_JOB_UNSUPPORTED, M_("unsupported request")},
+@@ -94,24 +94,24 @@ static const std::map<int, const char *> PKG_PROBLEMS_DICT = {
+     {RULE_PKG, M_("some dependency problem")},
+     {RULE_BEST_1, M_("cannot install the best update candidate for package ")},
+     {RULE_BEST_2, M_("cannot install the best candidate for the job")},
+-    {RULE_PKG_NOT_INSTALLABLE_1, M_("package %s is filtered out by modular filtering")},
+-    {RULE_PKG_NOT_INSTALLABLE_2, M_("package %s does not have a compatible architecture")},
+-    {RULE_PKG_NOT_INSTALLABLE_3, M_("package %s is not installable")},
+-    {RULE_PKG_NOT_INSTALLABLE_4, M_("package %s is filtered out by exclude filtering")},
+-    {RULE_PKG_NOTHING_PROVIDES_DEP, M_("nothing provides %s needed by %s")},
+-    {RULE_PKG_SAME_NAME, M_("cannot install both %s and %s")},
+-    {RULE_PKG_CONFLICTS, M_("package %s conflicts with %s provided by %s")},
+-    {RULE_PKG_OBSOLETES, M_("package %s obsoletes %s provided by %s")},
+-    {RULE_PKG_INSTALLED_OBSOLETES, M_("installed package %s obsoletes %s provided by %s")},
+-    {RULE_PKG_IMPLICIT_OBSOLETES, M_("package %s implicitly obsoletes %s provided by %s")},
+-    {RULE_PKG_REQUIRES, M_("package %s requires %s, but none of the providers can be installed")},
+-    {RULE_PKG_SELF_CONFLICT, M_("package %s conflicts with %s provided by itself")},
+-    {RULE_YUMOBS, M_("both package %s and %s obsolete %s")}
++    {RULE_PKG_NOT_INSTALLABLE_1, M_("package %s from %s is filtered out by modular filtering")},
++    {RULE_PKG_NOT_INSTALLABLE_2, M_("package %s from %s does not have a compatible architecture")},
++    {RULE_PKG_NOT_INSTALLABLE_3, M_("package %s from %s is not installable")},
++    {RULE_PKG_NOT_INSTALLABLE_4, M_("package %s from %s is filtered out by exclude filtering")},
++    {RULE_PKG_NOTHING_PROVIDES_DEP, M_("nothing provides %s needed by %s from %s")},
++    {RULE_PKG_SAME_NAME, M_("cannot install both %s from %s and %s from %s")},
++    {RULE_PKG_CONFLICTS, M_("package %s from %s conflicts with %s provided by %s from %s")},
++    {RULE_PKG_OBSOLETES, M_("package %s from %s obsoletes %s provided by %s from %s")},
++    {RULE_PKG_INSTALLED_OBSOLETES, M_("installed package %s obsoletes %s provided by %s from %s")},
++    {RULE_PKG_IMPLICIT_OBSOLETES, M_("package %s from %s implicitly obsoletes %s provided by %s from %s")},
++    {RULE_PKG_REQUIRES, M_("package %s from %s requires %s, but none of the providers can be installed")},
++    {RULE_PKG_SELF_CONFLICT, M_("package %s from %s conflicts with %s provided by itself")},
++    {RULE_YUMOBS, M_("both package %s from %s and %s from %s obsolete %s")}
+ };
+ 
+ static const std::map<int, const char *> MODULE_PROBLEMS_DICT = {
+-    {RULE_DISTUPGRADE, M_(" does not belong to a distupgrade repository")},
+-    {RULE_INFARCH, M_(" has inferior architecture")},
++    {RULE_DISTUPGRADE, M_("%s from %s does not belong to a distupgrade repository")},
++    {RULE_INFARCH, M_("%s from %s has inferior architecture")},
+     {RULE_UPDATE, M_("problem with installed module ")},
+     {RULE_JOB, M_("conflicting requests")},
+     {RULE_JOB_UNSUPPORTED, M_("unsupported request")},
+@@ -121,19 +121,19 @@ static const std::map<int, const char *> MODULE_PROBLEMS_DICT = {
+     {RULE_PKG, M_("some dependency problem")},
+     {RULE_BEST_1, M_("cannot install the best update candidate for module ")},
+     {RULE_BEST_2, M_("cannot install the best candidate for the job")},
+-    {RULE_PKG_NOT_INSTALLABLE_1, M_("module %s is disabled")},
+-    {RULE_PKG_NOT_INSTALLABLE_2, M_("module %s does not have a compatible architecture")},
+-    {RULE_PKG_NOT_INSTALLABLE_3, M_("module %s is not installable")},
+-    {RULE_PKG_NOT_INSTALLABLE_4, M_("module %s is disabled")},
+-    {RULE_PKG_NOTHING_PROVIDES_DEP, M_("nothing provides %s needed by module %s")},
+-    {RULE_PKG_SAME_NAME, M_("cannot install both modules %s and %s")},
+-    {RULE_PKG_CONFLICTS, M_("module %s conflicts with %s provided by %s")},
+-    {RULE_PKG_OBSOLETES, M_("module %s obsoletes %s provided by %s")},
+-    {RULE_PKG_INSTALLED_OBSOLETES, M_("installed module %s obsoletes %s provided by %s")},
+-    {RULE_PKG_IMPLICIT_OBSOLETES, M_("module %s implicitly obsoletes %s provided by %s")},
+-    {RULE_PKG_REQUIRES, M_("module %s requires %s, but none of the providers can be installed")},
+-    {RULE_PKG_SELF_CONFLICT, M_("module %s conflicts with %s provided by itself")},
+-    {RULE_YUMOBS, M_("both module %s and %s obsolete %s")}
++    {RULE_PKG_NOT_INSTALLABLE_1, M_("module %s from %s is disabled")},
++    {RULE_PKG_NOT_INSTALLABLE_2, M_("module %s from %s does not have a compatible architecture")},
++    {RULE_PKG_NOT_INSTALLABLE_3, M_("module %s from %s is not installable")},
++    {RULE_PKG_NOT_INSTALLABLE_4, M_("module %s from %s is disabled")},
++    {RULE_PKG_NOTHING_PROVIDES_DEP, M_("nothing provides %s needed by module %s from %s")},
++    {RULE_PKG_SAME_NAME, M_("cannot install both modules %s from %s and %s from %s")},
++    {RULE_PKG_CONFLICTS, M_("module %s from %s conflicts with %s provided by %s from %s")},
++    {RULE_PKG_OBSOLETES, M_("module %s from %s obsoletes %s provided by %s from %s")},
++    {RULE_PKG_INSTALLED_OBSOLETES, M_("installed module %s obsoletes %s provided by %s from %s")},
++    {RULE_PKG_IMPLICIT_OBSOLETES, M_("module %s from %s implicitly obsoletes %s provided by %s from %s")},
++    {RULE_PKG_REQUIRES, M_("module %s from %s requires %s, but none of the providers can be installed")},
++    {RULE_PKG_SELF_CONFLICT, M_("module %s from %s conflicts with %s provided by itself")},
++    {RULE_YUMOBS, M_("both module %s from %s and %s from %s obsolete %s")}
+ };
+ 
+ static std::string
+@@ -147,9 +147,11 @@ libdnf_problemruleinfo2str(libdnf::PackageSet * modularExclude, Solver *solv, So
+     Solvable *ss;
+     switch (type) {
+         case SOLVER_RULE_DISTUPGRADE:
+-            return solvid2str(pool, source) + TM_(problemDict.at(RULE_DISTUPGRADE), 1);
++            return tfm::format(TM_(problemDict.at(RULE_DISTUPGRADE), 1), solvid2str(pool, source).c_str(),
++                               pool_id2solvable(pool, source)->repo->name);
+         case SOLVER_RULE_INFARCH:
+-            return solvid2str(pool, source) + TM_(problemDict.at(RULE_INFARCH), 1);
++            return tfm::format(TM_(problemDict.at(RULE_DISTUPGRADE), 1), solvid2str(pool, source).c_str(),
++                               pool_id2solvable(pool, source)->repo->name);
+         case SOLVER_RULE_UPDATE:
+             return std::string(TM_(problemDict.at(RULE_UPDATE), 1)) + solvid2str(pool, source);
+         case SOLVER_RULE_JOB:
+@@ -172,44 +174,53 @@ libdnf_problemruleinfo2str(libdnf::PackageSet * modularExclude, Solver *solv, So
+             ss = pool->solvables + source;
+             if (pool_disabled_solvable(pool, ss)) {
+                 if (modularExclude && modularExclude->has(source)) {
+-                    return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_1), 1), solvid2str(pool, source).c_str());
++                    return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_1), 1),
++                                       solvid2str(pool, source).c_str(), pool_id2solvable(pool, source)->repo->name);
+                 } else {
+-                    return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_4), 1), solvid2str(pool, source).c_str());
++                    return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_4), 1),
++                                       solvid2str(pool, source).c_str(), pool_id2solvable(pool, source)->repo->name);
+                 }
+             }
+             if (ss->arch && ss->arch != ARCH_SRC && ss->arch != ARCH_NOSRC &&
+                 pool->id2arch && (ss->arch > pool->lastarch || !pool->id2arch[ss->arch]))
+-                return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_2), 1), solvid2str(pool, source).c_str());
+-            return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_3), 1), solvid2str(pool, source).c_str());
++                return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_2), 1), solvid2str(pool, source).c_str(),
++                                   pool_id2solvable(pool, source)->repo->name);
++            return tfm::format(TM_(problemDict.at(RULE_PKG_NOT_INSTALLABLE_3), 1), solvid2str(pool, source).c_str(),
++                               pool_id2solvable(pool, source)->repo->name);
+         case SOLVER_RULE_PKG_NOTHING_PROVIDES_DEP:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_NOTHING_PROVIDES_DEP), 1), pool_dep2str(pool, dep),
+-                               solvid2str(pool, source).c_str());
++                               solvid2str(pool, source).c_str(), pool_id2solvable(pool, source)->repo->name);
+         case SOLVER_RULE_PKG_SAME_NAME:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_SAME_NAME), 1), solvid2str(pool, source).c_str(),
+-                               solvid2str(pool, target).c_str());
++                               pool_id2solvable(pool, source)->repo->name, solvid2str(pool, target).c_str(),
++                               pool_id2solvable(pool, target)->repo->name);
+         case SOLVER_RULE_PKG_CONFLICTS:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_CONFLICTS), 1), solvid2str(pool, source).c_str(),
+-                               pool_dep2str(pool, dep), solvid2str(pool, target).c_str());
++                               pool_id2solvable(pool, source)->repo->name, pool_dep2str(pool, dep),
++                               solvid2str(pool, target).c_str(), pool_id2solvable(pool, target)->repo->name);
+         case SOLVER_RULE_PKG_OBSOLETES:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_OBSOLETES), 1), solvid2str(pool, source).c_str(),
+-                               pool_dep2str(pool, dep), solvid2str(pool, target).c_str());
++                               pool_id2solvable(pool, source)->repo->name, pool_dep2str(pool, dep),
++                               solvid2str(pool, target).c_str(), pool_id2solvable(pool, target)->repo->name);
+         case SOLVER_RULE_PKG_INSTALLED_OBSOLETES:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_INSTALLED_OBSOLETES), 1),
+                                solvid2str(pool, source).c_str(), pool_dep2str(pool, dep),
+-                               solvid2str(pool, target).c_str());
++                               solvid2str(pool, target).c_str(), pool_id2solvable(pool, target)->repo->name);
+         case SOLVER_RULE_PKG_IMPLICIT_OBSOLETES:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_IMPLICIT_OBSOLETES), 1),
+                                solvid2str(pool, source).c_str(), pool_dep2str(pool, dep),
+-                               solvid2str(pool, target).c_str());
++                               pool_id2solvable(pool, source)->repo->name, solvid2str(pool, target).c_str(),
++                               pool_id2solvable(pool, target)->repo->name);
+         case SOLVER_RULE_PKG_REQUIRES:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_REQUIRES), 1), solvid2str(pool, source).c_str(),
+-                               pool_dep2str(pool, dep));
++                               pool_id2solvable(pool, source)->repo->name, pool_dep2str(pool, dep));
+         case SOLVER_RULE_PKG_SELF_CONFLICT:
+             return tfm::format(TM_(problemDict.at(RULE_PKG_SELF_CONFLICT), 1), solvid2str(pool, source).c_str(),
+-                               pool_dep2str(pool, dep));
++                               pool_id2solvable(pool, source)->repo->name, pool_dep2str(pool, dep));
+         case SOLVER_RULE_YUMOBS:
+             return tfm::format(TM_(problemDict.at(RULE_YUMOBS), 1), solvid2str(pool, source).c_str(),
+-                               solvid2str(pool, target).c_str(), pool_dep2str(pool, dep));
++                               pool_id2solvable(pool, source)->repo->name, solvid2str(pool, target).c_str(),
++                               pool_id2solvable(pool, target)->repo->name, pool_dep2str(pool, dep));
+         default:
+             return solver_problemruleinfo2str(solv, type, source, target, dep);
+     }
+diff --git a/libdnf/module/ModulePackageContainer.cpp b/libdnf/module/ModulePackageContainer.cpp
+index 546d5837..0dbece4d 100644
+--- a/libdnf/module/ModulePackageContainer.cpp
++++ b/libdnf/module/ModulePackageContainer.cpp
+@@ -341,7 +341,7 @@ ModulePackageContainer::add(const std::string &fileContent, const std::string &
+ 
+     // add all modules to repository and pass ownership to module container
+     g_autofree gchar * path = g_build_filename(pImpl->installRoot.c_str(), "/etc/dnf/modules.d", NULL);
+-    auto packages = md.getAllModulePackages(pImpl->moduleSack, r, repoID);
++    auto packages = md.getAllModulePackages(pImpl->moduleSack, repo, repoID);
+     for(auto const& modulePackagePtr: packages) {
+         std::unique_ptr<ModulePackage> modulePackage(modulePackagePtr);
+         pImpl->modules.insert(std::make_pair(modulePackage->getId(), std::move(modulePackage)));
+diff --git a/tests/hawkey/test_goal.cpp b/tests/hawkey/test_goal.cpp
+index f22e1c80..b2d7af9f 100644
+--- a/tests/hawkey/test_goal.cpp
++++ b/tests/hawkey/test_goal.cpp
+@@ -593,11 +593,11 @@ START_TEST(test_goal_describe_problem_rules)
+     auto problems = goal->describeProblemRules(0, true);
+     const char *expected[] = {
+                 "conflicting requests",
+-                "nothing provides goodbye needed by hello-1-1.noarch"
++                "nothing provides goodbye needed by hello-1-1.noarch from main"
+                 };
+-    fail_unless(problems.size() == 2);
+-    fail_unless(problems[0] == expected[0]);
+-    fail_unless(problems[1] == expected[1]);
++    ck_assert_int_eq(problems.size(), 2);
++    ck_assert_str_eq(problems[0].c_str(), expected[0]);
++    ck_assert_str_eq(problems[1].c_str(), expected[1]);
+ 
+     g_object_unref(pkg);
+     hy_goal_free(goal);
+@@ -860,10 +860,10 @@ START_TEST(test_goal_lock)
+ 
+     auto problems = goal->describeProblemRules(0, true);
+     const char *expected[] = {
+-                "package bloop-ext-2.0-1.noarch requires bloop = 2.0-1, but none of the providers can be installed",
+-                "cannot install both bloop-2.0-1.noarch and bloop-1.0-1.noarch",
++                "package bloop-ext-2.0-1.noarch from updates requires bloop = 2.0-1, but none of the providers can be installed",
++                "cannot install both bloop-2.0-1.noarch from updates and bloop-1.0-1.noarch from @System",
+                 "conflicting requests",
+-                "package bloop-ext-1.0-1.noarch is filtered out by exclude filtering"
++                "package bloop-ext-1.0-1.noarch from updates is filtered out by exclude filtering"
+                 };
+     ck_assert_int_eq(problems.size(), 4);
+     ck_assert_str_eq(problems[0].c_str(), expected[0]);
+-- 
+2.40.1
+

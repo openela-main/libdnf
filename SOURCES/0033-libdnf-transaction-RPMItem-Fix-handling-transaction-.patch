@@ -1,0 +1,74 @@
+From c5919efe898294420ec8e91e4eed5b9081e681c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Luk=C3=A1=C5=A1=20Hr=C3=A1zk=C3=BD?= <lhrazky@redhat.com>
+Date: Thu, 17 Feb 2022 18:18:16 +0100
+Subject: [PATCH 33/34] libdnf/transaction/RPMItem: Fix handling transaction id
+ in resolveTransactionItemReason
+
+The maxTransactionId argument was ignored, the method was always returning the
+reason from the last transaction. This is the correct result for
+maxTransactionId = -1. In a couple of places the method is called with
+maxTransactionId = -2. Fixing this would mean nontrivial changes to the
+logic which could potentially break something else, so I'm leaving this
+behavior unchanged.
+
+For non-negative values of maxTransactionId (with which it's not being called
+anywhere in dnf codebase), the commit adds a condition to SELECT only
+transaction ids less than or equal to maxTransactionId.
+
+= changelog =
+msg: Fix handling transaction id in resolveTransactionItemReason
+type: bugfix
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2053014
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2010259
+---
+ libdnf/transaction/RPMItem.cpp | 21 ++++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/libdnf/transaction/RPMItem.cpp b/libdnf/transaction/RPMItem.cpp
+index 5f667ab9..ecce789d 100644
+--- a/libdnf/transaction/RPMItem.cpp
++++ b/libdnf/transaction/RPMItem.cpp
+@@ -255,7 +255,11 @@ RPMItem::resolveTransactionItemReason(SQLite3Ptr conn,
+                                       const std::string &arch,
+                                       int64_t maxTransactionId)
+ {
+-    const char *sql = R"**(
++    // NOTE: All negative maxTransactionId values are treated the same. The
++    // method is called with maxTransactionId = -2 in a couple of places, the
++    // semantics here have been the same as with -1 for a long time. If it
++    // ain't broke...
++    std::string sql = R"**(
+         SELECT
+             ti.action as action,
+             ti.reason as reason
+@@ -271,14 +275,25 @@ RPMItem::resolveTransactionItemReason(SQLite3Ptr conn,
+             AND ti.action not in (3, 5, 7, 10)
+             AND i.name = ?
+             AND i.arch = ?
++    )**";
++
++    if (maxTransactionId >= 0) {
++        sql.append(" AND ti.trans_id <= ?");
++    }
++
++    sql.append(R"**(
+         ORDER BY
+             ti.trans_id DESC
+         LIMIT 1
+-    )**";
++    )**");
+ 
+     if (arch != "") {
+         SQLite3::Query query(*conn, sql);
+-        query.bindv(name, arch);
++        if (maxTransactionId >= 0) {
++            query.bindv(name, arch, maxTransactionId);
++        } else {
++            query.bindv(name, arch);
++        }
+ 
+         if (query.step() == SQLite3::Statement::StepResult::ROW) {
+             auto action = static_cast< TransactionItemAction >(query.get< int64_t >("action"));
+-- 
+2.31.1
+
