@@ -1,0 +1,89 @@
+From 2834747bff215c6f8da4eef2820c29bc05e172e1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Wed, 7 Sep 2022 09:07:04 +0200
+Subject: [PATCH] Allow change of arch during security updates with noarch
+ (RhBug:2124483)
+
+This matches upgrade behaviour where upgrading from/to noarch is a
+special case and architecture change of a package is allowed
+automatically.
+
+= changelog =
+msg: Allow change of architecture for packages during security updates with noarch involved
+type: security
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2124483
+---
+ libdnf/sack/query.cpp | 34 ++++++++++++++++++++++++----------
+ 1 file changed, 24 insertions(+), 10 deletions(-)
+
+diff --git a/libdnf/sack/query.cpp b/libdnf/sack/query.cpp
+index 8672275d..205439ec 100644
+--- a/libdnf/sack/query.cpp
++++ b/libdnf/sack/query.cpp
+@@ -189,6 +189,13 @@ NameArchSolvableComparator(const Solvable * first, const Solvable * second)
+     return first->arch < second->arch;
+ }
+ 
++static bool
++NameSolvableComparator(const Solvable * first, const Solvable * second)
++{
++    return first->name < second->name;
++}
++
++
+ static bool
+ NamePrioritySolvableKey(const Solvable * first, const Solvable * second)
+ {
+@@ -1878,11 +1885,14 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+         std::vector<Solvable *> installed_solvables;
+ 
+         if (cmp_type & HY_UPGRADE) {
+-            // When doing HY_UPGRADE consider only candidate pkgs that have matching Name and Arch with:
+-            // * some already installed pkg (in other words: some other version of the pkg is already installed)
+-            // or
+-            // * with pkg that obsoletes some already installed (or to be installed in this transaction) pkg
+-            // Otherwise a pkg with different Arch than installed can end up in upgrade set which is wrong.
++            // When doing HY_UPGRADE consider only candidate pkgs that:
++            // * have matching Name and Arch with some already installed pkg
++            //   (in other words: some other version of the pkg is already installed)
++            // * have matching Name with some already installed pkg and either the candidate or the installed pkg is noarch.
++            //   This matches upgrade behavior where we allow architecture change only when noarch is involved.
++            //   Details: RhBug:2124483, RhBug:2101398 and RhBug:1171543
++            // * obsoletes some already installed (or to be installed in this transaction) pkg
++            // Otherwise a pkg with different Arch than installed (and than noarch) can end up in upgrade set which is wrong.
+             // It can result in dependency issues, reported as: RhBug:2088149.
+ 
+             Query installed(sack, ExcludeFlags::IGNORE_EXCLUDES);
+@@ -1893,7 +1903,7 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+             while ((installed_id = installed.pImpl->result->next(installed_id)) != -1) {
+                 installed_solvables.push_back(pool_id2solvable(pool, installed_id));
+             }
+-            std::sort(installed_solvables.begin(), installed_solvables.end(), NameArchSolvableComparator);
++            std::sort(installed_solvables.begin(), installed_solvables.end(), NameSolvableComparator);
+ 
+             Query obsoletes(sack, ExcludeFlags::IGNORE_EXCLUDES);
+             obsoletes.addFilter(HY_PKG, HY_EQ, resultPset);
+@@ -1915,12 +1925,16 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+             }
+ 
+             Id id = -1;
+-            // Add to candidates resultPset pkgs that match name and arch with some already installed pkg
++            // Add to candidates resultPset pkgs that match name and arch with some already installed pkg or match name and either the installed or candidate are NOARCH
+             while ((id = resultPset->next(id)) != -1) {
+                 Solvable * s = pool_id2solvable(pool, id);
+-                auto low = std::lower_bound(installed_solvables.begin(), installed_solvables.end(), s, NameArchSolvableComparator);
+-                if (low != installed_solvables.end() && s->name == (*low)->name && s->arch == (*low)->arch) {
+-                    candidates.push_back(s);
++                auto low = std::lower_bound(installed_solvables.begin(), installed_solvables.end(), s, NameSolvableComparator);
++                while (low != installed_solvables.end() && (*low)->name == s->name) {
++                    if (s->arch == (*low)->arch || s->arch == ARCH_NOARCH || (*low)->arch == ARCH_NOARCH) {
++                        candidates.push_back(s);
++                        break;
++                    }
++                    ++low;
+                 }
+             }
+ 
+-- 
+2.37.3
+
