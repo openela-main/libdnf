@@ -1,0 +1,23 @@
+diff -Naur libdnf-0.65.0-orig/docs/hawkey/conf.py libdnf-0.65.0/docs/hawkey/conf.py
+--- libdnf-0.65.0-orig/docs/hawkey/conf.py      2021-10-20 23:19:17.000000000 -0700
++++ libdnf-0.65.0/docs/hawkey/conf.py   2021-12-30 13:17:58.444674439 -0700
+@@ -260,6 +260,6 @@
+ rst_prolog = """
+ .. default-domain:: py
+ .. _libsolv: https://github.com/openSUSE/libsolv
+-.. _bugzilla: https://bugzilla.redhat.com/enter_bug.cgi?product=Fedora&component=hawkey
++.. _bugzilla: https://bugs.openela.org/
+
+ """
+diff -Naur libdnf-0.65.0-orig/libdnf/conf/Const.hpp libdnf-0.65.0/libdnf/conf/Const.hpp
+--- libdnf-0.65.0-orig/libdnf/conf/Const.hpp    2021-10-20 23:19:17.000000000 -0700
++++ libdnf-0.65.0/libdnf/conf/Const.hpp 2021-12-30 13:18:39.774165524 -0700
+@@ -41,7 +41,7 @@
+                  "installonlypkg(vm)",
+                  "multiversion(kernel)"};
+
+-constexpr const char * BUGTRACKER="https://bugzilla.redhat.com/enter_bug.cgi?product=Fedora&component=dnf";
++constexpr const char * BUGTRACKER="https://bugs.openela.org/";
+
+ }
+
