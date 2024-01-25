@@ -1,0 +1,90 @@
+From e83ff88f8e4604024e4d5f4fd9f2fa4e5d4f03f9 Mon Sep 17 00:00:00 2001
+From: Jaroslav Mracek <jmracek@redhat.com>
+Date: Tue, 23 Nov 2021 14:14:23 +0100
+Subject: [PATCH] Add getLatestModules()
+
+It returns latest module packages for each module name, stream, and
+architecture.
+
+It is an alternative implementation to code base with
+the old modular solver.
+
+Alternative to 73868368120ceea97ada628a1aa42236fb42b89d
+---
+ libdnf/module/ModulePackageContainer.cpp | 39 +++++++++++++++++++++++++++++++++++++++
+ libdnf/module/ModulePackageContainer.hpp |  9 +++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/libdnf/module/ModulePackageContainer.cpp b/libdnf/module/ModulePackageContainer.cpp
+index efab497..f9f861c 100644
+--- a/libdnf/module/ModulePackageContainer.cpp
++++ b/libdnf/module/ModulePackageContainer.cpp
+@@ -1037,6 +1037,45 @@ ModulePackageContainer::getLatestModulesPerRepo(ModuleState moduleFilter,
+     return output;
+ }
+ 
++std::vector<ModulePackage *>
++ModulePackageContainer::getLatestModules(const std::vector<ModulePackage *> modulePackages, bool activeOnly)
++{
++    std::vector<ModulePackage *> latestModules;
++    if (activeOnly) {
++        // When no active module return
++        if (!pImpl->activatedModules) {
++            return latestModules;
++        }
++    }
++    std::map<std::string, std::vector<ModulePackage *>> latest;
++
++    for (auto modulePackage : modulePackages) {
++        if (activeOnly && !isModuleActive(modulePackage)) {
++            continue;
++        }
++        auto nameStreamArch = modulePackage->getNameStream();
++        nameStreamArch.append(":");
++        nameStreamArch.append(modulePackage->getArchCStr());
++        auto & entries = latest[nameStreamArch];
++        if (entries.empty()) {
++            entries.push_back(modulePackage);
++        } else {
++            auto version = (*entries.begin())->getVersionNum();
++            if (version < modulePackage->getVersionNum()) {
++                entries.clear();
++                entries.push_back(modulePackage);
++            } else if (version == modulePackage->getVersionNum()) {
++                entries.push_back(modulePackage);
++            }
++        }
++    }
++    for (auto & entries : latest) {
++        for (auto modulePackage : entries.second) {
++            latestModules.push_back(modulePackage);
++        }
++    }
++    return latestModules;
++}
+ 
+ std::pair<std::vector<std::vector<std::string>>, ModulePackageContainer::ModuleErrorType>
+ ModulePackageContainer::resolveActiveModulePackages(bool debugSolver)
+diff --git a/libdnf/module/ModulePackageContainer.hpp b/libdnf/module/ModulePackageContainer.hpp
+index 7e5071b..42d5a9e 100644
+--- a/libdnf/module/ModulePackageContainer.hpp
++++ b/libdnf/module/ModulePackageContainer.hpp
+@@ -132,6 +132,15 @@ public:
+     std::vector<std::vector<std::vector<ModulePackage *>>> getLatestModulesPerRepo(
+         ModuleState moduleFilter, std::vector<ModulePackage *> modulePackages);
+ 
++    /**
++    * @brief Return all latest ModulePackages for each module Name, stream and architecture. In case of
++    * multiple latest packages, all will be returned. When activeOnly is true, it returns only the latest active
++    * packages.
++    *
++    * @return std::vector<ModulePackage *>
++    */
++    std::vector<ModulePackage *> getLatestModules(const std::vector<ModulePackage *> modulePackages, bool activeOnly);
++
+     std::vector<ModulePackage *> requiresModuleEnablement(const libdnf::PackageSet & packages);
+ 
+     /**
+--
+libgit2 1.1.0
+

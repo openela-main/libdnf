@@ -1,0 +1,78 @@
+From e43ef244e78d8563eb3cb7ff6a6074946f60c877 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Sun, 25 Apr 2021 19:47:53 +0200
+Subject: [PATCH 09/19] Revert "Change mechanism of module conflicts"
+
+This reverts commit 49600ba05b474bc29651aa122a9116b5ada69f4d.
+---
+ libdnf/dnf-sack.cpp                      | 1 +
+ libdnf/module/ModulePackage.cpp          | 2 --
+ libdnf/module/ModulePackage.hpp          | 1 -
+ libdnf/module/ModulePackageContainer.cpp | 1 -
+ libdnf/module/ModulePackageContainer.hpp | 1 -
+ 5 files changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/libdnf/dnf-sack.cpp b/libdnf/dnf-sack.cpp
+index b5c7edc0..b9baeaef 100644
+--- a/libdnf/dnf-sack.cpp
++++ b/libdnf/dnf-sack.cpp
+@@ -2297,6 +2297,7 @@ void readModuleMetadataFromRepo(DnfSack * sack, libdnf::ModulePackageContainer *
+     modulePackages->add(sack);
+     modulePackages->loadFailSafeData();
+     if (!modulePackages->empty()) {
++        modulePackages->createConflictsBetweenStreams();
+         // TODO remove hard-coded path
+         try {
+             std::vector<std::string> paths{"/etc/os-release", "/usr/lib/os-release"};
+diff --git a/libdnf/module/ModulePackage.cpp b/libdnf/module/ModulePackage.cpp
+index d0017877..d644eca6 100644
+--- a/libdnf/module/ModulePackage.cpp
++++ b/libdnf/module/ModulePackage.cpp
+@@ -75,8 +75,6 @@ static void setSovable(Pool * pool, Solvable * solvable, const std::string & nam
+     ss << "module(" << name << ")";
+     auto depId = pool_str2id(pool, ss.str().c_str(), 1);
+     solvable_add_deparray(solvable, SOLVABLE_PROVIDES, depId, -1);
+-    // create Conflicts: module($name)
+-    solvable_add_deparray(solvable, SOLVABLE_CONFLICTS, depId, 0);
+ 
+     // create Provide: module($name:$stream)
+     ss.str(std::string());
+diff --git a/libdnf/module/ModulePackage.hpp b/libdnf/module/ModulePackage.hpp
+index b618df58..145c6d63 100644
+--- a/libdnf/module/ModulePackage.hpp
++++ b/libdnf/module/ModulePackage.hpp
+@@ -71,7 +71,6 @@ public:
+ 
+     std::vector<ModuleDependencies> getModuleDependencies() const;
+ 
+-    ///DEPRECATED
+     void addStreamConflict(const ModulePackage * package);
+ 
+     Id getId() const { return id; };
+diff --git a/libdnf/module/ModulePackageContainer.cpp b/libdnf/module/ModulePackageContainer.cpp
+index 97c84c01..893b839a 100644
+--- a/libdnf/module/ModulePackageContainer.cpp
++++ b/libdnf/module/ModulePackageContainer.cpp
+@@ -204,7 +204,6 @@ private:
+     /// solvable.arch = <moduleArch>
+     /// solvable.summary = <moduleContext>
+     /// solvable.description = <moduleName>:<moduleStream>
+-    /// solvable.conflicts = module(<moduleName>)
+     DnfSack * moduleSack;
+     std::unique_ptr<PackageSet> activatedModules;
+     std::string installRoot;
+diff --git a/libdnf/module/ModulePackageContainer.hpp b/libdnf/module/ModulePackageContainer.hpp
+index 99fc0677..c1001fce 100644
+--- a/libdnf/module/ModulePackageContainer.hpp
++++ b/libdnf/module/ModulePackageContainer.hpp
+@@ -115,7 +115,6 @@ public:
+     Id addPlatformPackage(const std::string &osReleasePath, const char *  platformModule);
+     Id addPlatformPackage(DnfSack * sack,
+         const std::vector<std::string> & osReleasePath, const char * platformModule);
+-    /// DEPRECATED
+     void createConflictsBetweenStreams();
+ 
+     /**
+-- 
+2.31.1
+
