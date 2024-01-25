@@ -1,0 +1,91 @@
+From 07416268889f95e1495fb3d7b856de1c502870ba Mon Sep 17 00:00:00 2001
+From: Jaroslav Rohel <jrohel@redhat.com>
+Date: Wed, 21 Jul 2021 11:15:50 +0200
+Subject: [PATCH] covscan: remove unused vars, mark private func static, return values
+
+The `begin` and `end` variables were not used
+in `ModulePackageContainer::updateFailSafeData`. Removed.
+
+The `checksum` in "utils.cpp" is a private (static) function.
+
+Added check of return value of `dnf_copy_recursive` function in unit test.
+
+In the `install` in the "goal-py.cpp" file:
+Explicitly ignores the return values of `hy_goal_install` and
+`hy_goal_install_optional`. The functions always return zero.
+Explicitly ignores the return values of `hy_goal_install_selector` and
+`hy_goal_install_selector_optional`. The `error` argument is used instead.
+---
+ libdnf/module/ModulePackageContainer.cpp           | 2 --
+ libdnf/utils/utils.cpp                             | 2 +-
+ python/hawkey/goal-py.cpp                          | 8 ++++----
+ tests/libdnf/module/ModulePackageContainerTest.cpp | 3 ++-
+ 4 files changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/libdnf/module/ModulePackageContainer.cpp b/libdnf/module/ModulePackageContainer.cpp
+index c0ad126..efab497 100644
+--- a/libdnf/module/ModulePackageContainer.cpp
++++ b/libdnf/module/ModulePackageContainer.cpp
+@@ -1656,8 +1656,6 @@ void ModulePackageContainer::updateFailSafeData()
+     if (pImpl->activatedModules) {
+         std::vector<ModulePackage *> latest = pImpl->getLatestActiveEnabledModules();
+ 
+-        auto begin = fileNames.begin();
+-        auto end = fileNames.end();
+         if (g_mkdir_with_parents(pImpl->persistDir.c_str(), 0755) == -1) {
+             const char * errTxt = strerror(errno);
+             auto logger(Log::getLogger());
+diff --git a/libdnf/utils/utils.cpp b/libdnf/utils/utils.cpp
+index 450718d..15f5275 100644
+--- a/libdnf/utils/utils.cpp
++++ b/libdnf/utils/utils.cpp
+@@ -301,7 +301,7 @@ void decompress(const char * inPath, const char * outPath, mode_t outMode, const
+     fclose(inFile);
+ }
+ 
+-void checksum(const char * type, const char * inPath, const char * checksum_valid, bool * valid_out, gchar ** calculated_out)
++static void checksum(const char * type, const char * inPath, const char * checksum_valid, bool * valid_out, gchar ** calculated_out)
+ {
+     GError * errP{nullptr};
+     gboolean valid;
+diff --git a/python/hawkey/goal-py.cpp b/python/hawkey/goal-py.cpp
+index 2641a1d..5bbb959 100644
+--- a/python/hawkey/goal-py.cpp
++++ b/python/hawkey/goal-py.cpp
+@@ -281,15 +281,15 @@ install(_GoalObject *self, PyObject *args, PyObject *kwds) try
+ 
+     if (flags & HY_WEAK_SOLV) {
+         if (pkg) {
+-            hy_goal_install_optional(self->goal, pkg);
++            (void)hy_goal_install_optional(self->goal, pkg);
+         } else {
+-            hy_goal_install_selector_optional(self->goal, sltr, &error);
++            (void)hy_goal_install_selector_optional(self->goal, sltr, &error);
+         }
+     } else {
+         if (pkg) {
+-            hy_goal_install(self->goal, pkg);
++            (void)hy_goal_install(self->goal, pkg);
+         } else {
+-            hy_goal_install_selector(self->goal, sltr, &error);
++            (void)hy_goal_install_selector(self->goal, sltr, &error);
+         }
+     }
+     return op_error2exc(error);
+diff --git a/tests/libdnf/module/ModulePackageContainerTest.cpp b/tests/libdnf/module/ModulePackageContainerTest.cpp
+index b2cf170..6360a0c 100644
+--- a/tests/libdnf/module/ModulePackageContainerTest.cpp
++++ b/tests/libdnf/module/ModulePackageContainerTest.cpp
+@@ -17,7 +17,8 @@ void ModulePackageContainerTest::setUp()
+     char *retptr = mkdtemp(tmpdir);
+     CPPUNIT_ASSERT(retptr);
+     char * etc_target = g_strjoin(NULL, tmpdir, "/etc", NULL);
+-    dnf_copy_recursive(TESTDATADIR "/modules/etc", etc_target, &error);
++    auto ret = dnf_copy_recursive(TESTDATADIR "/modules/etc", etc_target, &error);
++    g_assert_true(ret);
+     g_assert_no_error(error);
+     g_free(etc_target);
+ 
+--
+libgit2 1.0.1
+

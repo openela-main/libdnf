@@ -1,0 +1,26 @@
+From fe466856f54ed2cd261a863b2c929a064ae5e945 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Sun, 25 Apr 2021 19:47:51 +0200
+Subject: [PATCH 02/19] Revert "Enhance description of modular solvables"
+
+This reverts commit 943d9a1ba905f2e10975b16edff0684964c135b6.
+---
+ libdnf/module/ModulePackage.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/libdnf/module/ModulePackage.cpp b/libdnf/module/ModulePackage.cpp
+index 3757f6ad..d0017877 100644
+--- a/libdnf/module/ModulePackage.cpp
++++ b/libdnf/module/ModulePackage.cpp
+@@ -50,8 +50,6 @@ namespace libdnf {
+  *   Arch: $arch (If arch is not defined, set "noarch")
+  *   Provides: module($name)
+  *   Provides: module($name:$stream)
+- *   Summary: original_context
+- *   Description: name:stream
+  */
+ static void setSovable(Pool * pool, Solvable * solvable, const std::string & name,
+     const std::string & stream, const std::string & version, const std::string & context, const char * arch, const std::string & original_context)
+-- 
+2.31.1
+
