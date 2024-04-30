@@ -1,0 +1,37 @@
+From ccd66a3cb4ddb7a0f0d914ee06eed58121dbe7ce Mon Sep 17 00:00:00 2001
+From: Aleš Matěj <amatej@redhat.com>
+Date: Tue, 27 Jun 2023 07:24:28 +0200
+Subject: [PATCH] filterAdvisory: match installed_solvables sort with lower_bound (RhBug:2212838)
+
+`std::lower_bound` expects that the range it operates on is sorted by
+the provided comparator.
+
+`lower_bound()` is used on `installed_solvables` twice, first with
+comparator `NameSolvableComparator` and later with
+`SolvableCompareAdvisoryPkgNameArch` to cover both we need to sort
+`installed_solvables` by name and arch.
+
+Otherwise this can lead to problems if multiple architectures of a pkg
+are installed.
+
+For: https://bugzilla.redhat.com/show_bug.cgi?id=2212838
+---
+ libdnf/sack/query.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libdnf/sack/query.cpp b/libdnf/sack/query.cpp
+index b7b1560..7937770 100644
+--- a/libdnf/sack/query.cpp
++++ b/libdnf/sack/query.cpp
+@@ -1903,7 +1903,7 @@ Query::Impl::filterAdvisory(const Filter & f, Map *m, int keyname)
+             while ((installed_id = installed.pImpl->result->next(installed_id)) != -1) {
+                 installed_solvables.push_back(pool_id2solvable(pool, installed_id));
+             }
+-            std::sort(installed_solvables.begin(), installed_solvables.end(), NameSolvableComparator);
++            std::sort(installed_solvables.begin(), installed_solvables.end(), NameArchSolvableComparator);
+ 
+             Query obsoletes(sack, ExcludeFlags::IGNORE_EXCLUDES);
+             obsoletes.addFilter(HY_PKG, HY_EQ, resultPset);
+--
+libgit2 1.6.4
+
