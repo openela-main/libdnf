@@ -42,6 +42,8 @@
 %bcond_with rhsm
 %endif
 
+%bcond_without selinux
+
 %if 0%{?rhel}
 %bcond_with zchunk
 %else
@@ -56,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              17%{?dist}
+Release:              19%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -107,7 +109,10 @@ Patch43:              0043-Update-translations.patch
 Patch44:              0044-Add_repoid_to_solver_error_messagase.patch
 Patch45:              0045-conf-Support-proxy-_none_-in-main-config-RhBug-21557.patch
 Patch46:              0046-Update-translations-RHEL-8.9.patch
-Patch47:              9999-change-bugtracker.diff
+Patch47:              0047-filterAdvisory-installed_solvables-sort-RhBug2212838.patch
+Patch48:              0048-Avoid-reinstal-installonly-packages-marked-for-ERASE.patch
+Patch49:              0049-PGP-Set-a-default-creation-SELinux-labels-on-GnuPG-d.patch
+Patch50:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -132,6 +137,9 @@ BuildRequires:        pkgconfig(sqlite3)
 BuildRequires:        pkgconfig(json-c)
 BuildRequires:        pkgconfig(cppunit)
 BuildRequires:        pkgconfig(libcrypto)
+%if %{with selinux}
+BuildRequires:        pkgconfig(libselinux)
+%endif
 BuildRequires:        pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
 BuildRequires:        pkgconfig(smartcols)
 BuildRequires:        gettext
@@ -253,7 +261,8 @@ pushd build-py2
     %define __builddir build-py2
   %endif
   %cmake -DPYTHON_DESIRED:FILEPATH=%{__python2} -DWITH_MAN=OFF ../ %{!?with_zchunk:-DWITH_ZCHUNK=OFF} %{!?with_valgrind:-DDISABLE_VALGRIND=1} %{_cmake_opts} -DLIBDNF_MAJOR_VERSION=%{libdnf_major_version} -DLIBDNF_MINOR_VERSION=%{libdnf_minor_version} -DLIBDNF_MICRO_VERSION=%{libdnf_micro_version} \
-    -DWITH_SANITIZERS=%{?with_sanitizers:ON}%{!?with_sanitizers:OFF}
+    -DWITH_SANITIZERS=%{?with_sanitizers:ON}%{!?with_sanitizers:OFF} \
+    -DENABLE_SELINUX=%{?with_selinux:ON}%{!?with_selinux:OFF}
   %make_build
 popd
 %endif
@@ -267,7 +276,8 @@ pushd build-py3
     %define __builddir build-py3
   %endif
   %cmake -DPYTHON_DESIRED:FILEPATH=%{__python3} -DWITH_GIR=0 -DWITH_MAN=0 -Dgtkdoc=0 ../ %{!?with_zchunk:-DWITH_ZCHUNK=OFF} %{!?with_valgrind:-DDISABLE_VALGRIND=1} %{_cmake_opts} -DLIBDNF_MAJOR_VERSION=%{libdnf_major_version} -DLIBDNF_MINOR_VERSION=%{libdnf_minor_version} -DLIBDNF_MICRO_VERSION=%{libdnf_micro_version} \
-    -DWITH_SANITIZERS=%{?with_sanitizers:ON}%{!?with_sanitizers:OFF}
+    -DWITH_SANITIZERS=%{?with_sanitizers:ON}%{!?with_sanitizers:OFF} \
+    -DENABLE_SELINUX=%{?with_selinux:ON}%{!?with_selinux:OFF}
   %make_build
 popd
 %endif
@@ -353,8 +363,15 @@ popd
 %endif
 
 %changelog
-* Thu Jan 25 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Wed May 22 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
+
+* Wed Oct 18 2023 Petr Pisar <ppisar@redhat.com> - 0.63.0-19
+- Set default SELinux labels on GnuPG directories (RHEL-6421)
+
+* Fri Oct 13 2023 Jaroslav Rohel <jrohel@redhat.com> - 0.63.0-18
+- filterAdvisory: match installed_solvables sort with lower_bound (RhBug:2212838, RHEL-1244)
+- Avoid reinstalling installonly packages marked for ERASE (RhBug:2163474, RHEL-1253)
 
 * Fri Sep 08 2023 Marek Blaha <mblaha@redhat.com> - 0.63.0-17
 - Update translations
