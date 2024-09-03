@@ -1,0 +1,93 @@
+From a0a32b4c2e2a03ff6ffcb6b7285905ec50892798 Mon Sep 17 00:00:00 2001
+From: Colin Walters <walters@verbum.org>
+Date: Tue, 4 Jun 2024 06:57:19 -0400
+Subject: [PATCH] repo: Don't try to perform labeling if SELinux is disabled
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The default for container execution is that `/sys/fs/selinux`
+is not mounted, and the libselinux library function `is_selinux_enabled`
+should be used to dynamically check if the system should attempt to perform SELinux labeling.
+
+This is how it's done by rpm, ostree, and systemd for example.
+
+But this code unconditionally tries to label if it finds a policy,
+which breaks in an obscure corner case
+when executed inside a container that includes policy files (e.g.
+fedora/rhel-bootc) but when we're not using overlayfs for the backend
+(with BUILDAH_BACKEND=vfs).
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/repo/Repo.cpp | 50 +++++++++++++++++++++++---------------------
+ 1 file changed, 26 insertions(+), 24 deletions(-)
+
+diff --git a/libdnf/repo/Repo.cpp b/libdnf/repo/Repo.cpp
+index 16f15195..10b88813 100644
+--- a/libdnf/repo/Repo.cpp
++++ b/libdnf/repo/Repo.cpp
+@@ -679,34 +679,36 @@ static int create_temporary_directory(char *name_template) {
+     int old_default_context_was_retrieved = 0;
+     struct selabel_handle *labeling_handle = NULL;
+ 
+-    /* A purpose of this piece of code is to deal with applications whose
+-     * security policy overrides a file context for temporary files but don't
+-     * know that libdnf executes GnuPG which expects a default file context. */
+-    if (0 == getfscreatecon(&old_default_context)) {
+-        old_default_context_was_retrieved = 1;
+-    } else {
+-        logger->debug(tfm::format("Failed to retrieve a default SELinux context"));
+-    }
++    if (is_selinux_enabled()) {
++        /* A purpose of this piece of code is to deal with applications whose
++         * security policy overrides a file context for temporary files but don't
++         * know that libdnf executes GnuPG which expects a default file context. */
++        if (0 == getfscreatecon(&old_default_context)) {
++            old_default_context_was_retrieved = 1;
++        } else {
++            logger->debug(tfm::format("Failed to retrieve a default SELinux context"));
++        }
+ 
+-    labeling_handle = selabel_open(SELABEL_CTX_FILE, NULL, 0);
+-    if (NULL == labeling_handle) {
+-        logger->debug(tfm::format("Failed to open a SELinux labeling handle: %s",
+-                    strerror(errno)));
+-    } else {
+-        if (selabel_lookup(labeling_handle, &new_default_context, name_template, 0700)) {
+-            /* Here we could hard-code "system_u:object_r:user_tmp_t:s0", but
+-             * that value should be really defined in default file context
+-             * SELinux policy. Only log that the policy is incpomplete. */
+-            logger->debug(tfm::format("Failed to look up a default SELinux label for \"%s\"",
+-                        name_template));
++        labeling_handle = selabel_open(SELABEL_CTX_FILE, NULL, 0);
++        if (NULL == labeling_handle) {
++            logger->debug(tfm::format("Failed to open a SELinux labeling handle: %s",
++                        strerror(errno)));
+         } else {
+-            if (setfscreatecon(new_default_context)) {
+-                logger->debug(tfm::format("Failed to set default SELinux context to \"%s\"",
+-                            new_default_context));
++            if (selabel_lookup(labeling_handle, &new_default_context, name_template, 0700)) {
++                /* Here we could hard-code "system_u:object_r:user_tmp_t:s0", but
++                 * that value should be really defined in default file context
++                 * SELinux policy. Only log that the policy is incpomplete. */
++                logger->debug(tfm::format("Failed to look up a default SELinux label for \"%s\"",
++                            name_template));
++            } else {
++                if (setfscreatecon(new_default_context)) {
++                    logger->debug(tfm::format("Failed to set default SELinux context to \"%s\"",
++                                new_default_context));
++                }
++                freecon(new_default_context);
+             }
+-            freecon(new_default_context);
++            selabel_close(labeling_handle);
+         }
+-        selabel_close(labeling_handle);
+     }
+ #endif
+ 
+-- 
+2.45.2
+

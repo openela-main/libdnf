@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              8%{?dist}
+Release:              8%{?dist}.1
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -71,7 +71,8 @@ Patch5:               0005-filterAdvisory-installed_solvables-sort-RhBug2212838.
 Patch6:               0006-hawkeysubject-get_best_selectors-only-obsol-oflatest.patch
 Patch7:               0007-Avoid-reinstal-installonly-packages-marked-for-ERASE.patch
 Patch8:               0008-PGP-Set-a-default-creation-SELinux-labels-on-GnuPG-d.patch
-Patch9:               9999-change-bugtracker.diff
+Patch9:               0009-repo-Don-t-try-to-perform-labeling-if-SELinux-is-dis.patch
+Patch10:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -321,8 +322,12 @@ popd
 %endif
 
 %changelog
-* Tue Apr 30 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue Sep 03 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
+
+* Fri Jun 21 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-8.1
+- Do not set a default SELinux creation context if SELinux appears to be
+  disabled (RHEL-39796)
 
 * Wed Oct 25 2023 Petr Pisar <ppisar@redhat.com> - 0.69.0-8
 - Set default SELinux labels on GnuPG directories (RHEL-11238)
