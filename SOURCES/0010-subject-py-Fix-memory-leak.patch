@@ -1,0 +1,37 @@
+From c91ed331cc9ea6512a7aaad918db1be9bc6d4f69 Mon Sep 17 00:00:00 2001
+From: Marek Blaha <mblaha@redhat.com>
+Date: Tue, 26 Mar 2024 14:09:47 +0100
+Subject: [PATCH] subject-py: Fix memory leak
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: fd284bda6f7430b2e939f95c6836c972e22a2eb4
+
+Posible memory leak was detected in get_best_solution() method.
+
+Resolves: https://issues.redhat.com/browse/RHEL-26226
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ python/hawkey/subject-py.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/python/hawkey/subject-py.cpp b/python/hawkey/subject-py.cpp
+index a88d572a..3e1919e7 100644
+--- a/python/hawkey/subject-py.cpp
++++ b/python/hawkey/subject-py.cpp
+@@ -361,8 +361,10 @@ get_best_solution(_SubjectObject *self, PyObject *args, PyObject *kwds)
+     HyNevra nevra{nullptr};
+ 
+     UniquePtrPyObject q(get_solution(self, args, kwds, &nevra));
+-    if (!q)
++    if (!q) {
++        delete nevra;
+         return NULL;
++    }
+     PyObject *ret_dict = PyDict_New();
+     PyDict_SetItem(ret_dict, PyString_FromString("query"), q.get());
+     if (nevra) {
+-- 
+2.44.0
+

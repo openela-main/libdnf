@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              8%{?dist}.1
+Release:              12%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -71,8 +71,15 @@ Patch5:               0005-filterAdvisory-installed_solvables-sort-RhBug2212838.
 Patch6:               0006-hawkeysubject-get_best_selectors-only-obsol-oflatest.patch
 Patch7:               0007-Avoid-reinstal-installonly-packages-marked-for-ERASE.patch
 Patch8:               0008-PGP-Set-a-default-creation-SELinux-labels-on-GnuPG-d.patch
-Patch9:               0009-repo-Don-t-try-to-perform-labeling-if-SELinux-is-dis.patch
-Patch10:              9999-change-bugtracker.diff
+Patch9:               0009-Replace-assert-by-map_grow.patch
+Patch10:              0010-subject-py-Fix-memory-leak.patch
+Patch11:              0011-Add-virtual-destructor-to-TransactionItem.patch
+Patch12:              0012-MergedTransaction-Calculate-RPM-difference-between-t.patch
+Patch13:              0013-MergedTransaction-Fix-invalid-memory-access-when-dro.patch
+Patch14:              0014-context-use-rpmtsAddReinstallElement-when-doing-a-re.patch
+Patch15:              0015-Since-we-use-rpmtsAddReinstallElement-rpm-also-unins.patch
+Patch16:              0016-repo-Don-t-try-to-perform-labeling-if-SELinux-is-dis.patch
+Patch17:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -322,12 +329,26 @@ popd
 %endif
 
 %changelog
-* Tue Sep 03 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue Nov 12 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
 
-* Fri Jun 21 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-8.1
+* Fri Jun 21 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-12
 - Do not set a default SELinux creation context if SELinux appears to be
-  disabled (RHEL-39796)
+  disabled (RHEL-43232)
+
+* Thu May 16 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-11
+- Fix reinstalling packages which conflicts with themselves in
+  dnf_transaction_commit() (RHEL-1454)
+
+* Tue Apr 23 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-10
+- Fix calculating a difference between two same-version RPM transacations
+  (RHEL-17494)
+
+* Tue Apr 16 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-9
+- Grow memory if applying a query after increasing a number of available
+  packages (RHEL-27657)
+- Fix a memory leak in get_best_solution() (RHEL-26226)
+- Fix destructing libdnf::TransactionItem from a base class (RHEL-26240)
 
 * Wed Oct 25 2023 Petr Pisar <ppisar@redhat.com> - 0.69.0-8
 - Set default SELinux labels on GnuPG directories (RHEL-11238)

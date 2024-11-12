@@ -1,0 +1,94 @@
+From 020aab89fd015d8303b0e8f3f84e126dcdd4d4f4 Mon Sep 17 00:00:00 2001
+From: Jan Kolarik <jkolarik@redhat.com>
+Date: Tue, 23 Apr 2024 14:11:19 +0000
+Subject: [PATCH 2/2] MergedTransaction: Fix invalid memory access when
+ dropping items
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: 90d2ffad964a91a7a798b81e15c16eb1e840f257
+
+When an item is dropped from the merged transaction, the `ItemPair` reference becomes invalid and should no longer be used.
+
+Resolves: https://issues.redhat.com/browse/RHEL-17494
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/transaction/MergedTransaction.cpp | 18 +++++++++++-------
+ libdnf/transaction/MergedTransaction.hpp |  2 +-
+ 2 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/libdnf/transaction/MergedTransaction.cpp b/libdnf/transaction/MergedTransaction.cpp
+index 8f26882f..75d2c1e7 100644
+--- a/libdnf/transaction/MergedTransaction.cpp
++++ b/libdnf/transaction/MergedTransaction.cpp
+@@ -264,14 +264,15 @@ getItemIdentifier(ItemPtr item)
+ 
+ /**
+  * Resolve the difference between RPMs in the first and second transaction item
+- *  and create a ItemPair of Upgrade, Downgrade or drop the item from the merged
+- *  transaction set in case of both packages are of the same version.
+- * Method is called when original package is being removed and than installed again.
++ *  and create a ItemPair of Upgrade, Downgrade or remove the item from the merged
++ *  transaction set in case of both packages are the same.
++ * Method is called when original package is being removed and then installed again.
+  * \param itemPairMap merged transaction set
+  * \param previousItemPair original item pair
+  * \param mTransItem new transaction item
++ * \return true if the original and new transaction item differ
+  */
+-void
++bool
+ MergedTransaction::resolveRPMDifference(ItemPairMap &itemPairMap,
+                                         ItemPair &previousItemPair,
+                                         TransactionItemBasePtr mTransItem)
+@@ -287,7 +288,7 @@ MergedTransaction::resolveRPMDifference(ItemPairMap &itemPairMap,
+         firstRPM->getRelease() == secondRPM->getRelease()) {
+         // Drop the item from merged transaction
+         itemPairMap.erase(getItemIdentifier(firstItem));
+-        return;
++        return false;
+     } else if ((*firstRPM) < (*secondRPM)) {
+         // Upgrade to secondRPM
+         previousItemPair.first->setAction(TransactionItemAction::UPGRADED);
+@@ -298,6 +299,7 @@ MergedTransaction::resolveRPMDifference(ItemPairMap &itemPairMap,
+         mTransItem->setAction(TransactionItemAction::DOWNGRADE);
+     }
+     previousItemPair.second = mTransItem;
++    return true;
+ }
+ 
+ void
+@@ -308,12 +310,14 @@ MergedTransaction::resolveErase(ItemPairMap &itemPairMap,
+     /*
+      * The original item has been removed - it has to be installed now unless the rpmdb
+      *  has changed. Resolve the difference between packages and mark it as Upgrade,
+-     *  Reinstall or Downgrade
++     *  Downgrade or remove it from the transaction
+      */
+     if (mTransItem->getAction() == TransactionItemAction::INSTALL) {
+         if (mTransItem->getItem()->getItemType() == ItemType::RPM) {
+             // resolve the difference between RPM packages
+-            resolveRPMDifference(itemPairMap, previousItemPair, mTransItem);
++            if (!resolveRPMDifference(itemPairMap, previousItemPair, mTransItem)) {
++                return;
++            }
+         } else {
+             // difference between comps can't be resolved
+             mTransItem->setAction(TransactionItemAction::REINSTALL);
+diff --git a/libdnf/transaction/MergedTransaction.hpp b/libdnf/transaction/MergedTransaction.hpp
+index f85b133a..50212159 100644
+--- a/libdnf/transaction/MergedTransaction.hpp
++++ b/libdnf/transaction/MergedTransaction.hpp
+@@ -76,7 +76,7 @@ protected:
+     typedef std::map< std::string, ItemPair > ItemPairMap;
+ 
+     void mergeItem(ItemPairMap &itemPairMap, TransactionItemBasePtr transItem);
+-    void resolveRPMDifference(ItemPairMap &itemPairMap, ItemPair &previousItemPair, TransactionItemBasePtr mTransItem);
++    bool resolveRPMDifference(ItemPairMap &itemPairMap, ItemPair &previousItemPair, TransactionItemBasePtr mTransItem);
+     void resolveErase(ItemPairMap &itemPairMap, ItemPair &previousItemPair, TransactionItemBasePtr mTransItem);
+     void resolveAltered(ItemPairMap &itemPairMap, ItemPair &previousItemPair, TransactionItemBasePtr mTransItem);
+ };
+-- 
+2.44.0
+

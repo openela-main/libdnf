@@ -1,0 +1,38 @@
+From 3c5641a9c7c416e387a54eaf7dad7c33db52b0ec Mon Sep 17 00:00:00 2001
+From: Jaroslav Mracek <jmracek@redhat.com>
+Date: Wed, 6 Mar 2024 07:46:34 +0100
+Subject: [PATCH] Replace assert by map_grow
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: ef8ac7fcedea1ec87dd3149ce1abdf8daeee25b9
+
+It will make code prepared for situation when number of solvables
+is increased after query is created and applied.
+
+The issue can be easilly triggered by adding remote RPMs therefore
+the patch fixes a standard situation
+
+Resolves: https://issues.redhat.com/browse/RHEL-27657
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/sack/query.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libdnf/sack/query.cpp b/libdnf/sack/query.cpp
+index 79377703..6eecfa50 100644
+--- a/libdnf/sack/query.cpp
++++ b/libdnf/sack/query.cpp
+@@ -2313,7 +2313,7 @@ Query::Impl::apply()
+     if (!result)
+         initResult();
+     map_init(&m, pool->nsolvables);
+-    assert(m.size == result->getMap()->size);
++    map_grow(result->getMap(), pool->nsolvables);
+     for (auto f : filters) {
+         map_empty(&m);
+         switch (f.getKeyname()) {
+-- 
+2.44.0
+

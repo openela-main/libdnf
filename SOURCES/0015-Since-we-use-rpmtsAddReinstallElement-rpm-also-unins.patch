@@ -1,0 +1,81 @@
+From 7a3d4ed40276d2667cf48f83672ef1f142a8f0a7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Fri, 3 May 2024 08:55:47 +0200
+Subject: [PATCH 2/2] Since we use rpmtsAddReinstallElement rpm also uninstalls
+ the package
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: bc371683ab69d51127952b037bde209a56e44105
+
+It calls callbacks for `RPMCALLBACK_INST_START` and
+`RPMCALLBACK_INST_PROGRESS` just like before when the reinstall was done
+through regural install (rpmtsAddInstallElement) but in addition it also
+calls `RPMCALLBACK_UNINST_START` and `RPMCALLBACK_UNINST_PROGRESS`. To
+ensure they find the `DnfPackage` add it to `remove_helper` array.
+
+Unfortunaly this means that the reinstall action is reported twice to
+the clients (one install and one uninstall). We could try to hide one of
+the them but I think a better solution is to report what is actually
+happening and report one install and one uninstall.
+
+This is for the context part of libdnf (microdnf, packagekit, ...)
+
+Fixes: https://github.com/rpm-software-management/libdnf/issues/1653
+Resolves: https://issues.redhat.com/browse/RHEL-1454
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/dnf-transaction.cpp | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/libdnf/dnf-transaction.cpp b/libdnf/dnf-transaction.cpp
+index d57e463d..8e17ba2d 100644
+--- a/libdnf/dnf-transaction.cpp
++++ b/libdnf/dnf-transaction.cpp
+@@ -602,7 +602,7 @@ dnf_transaction_ts_progress_cb(const void *arg,
+ 
+             /* map to correct action code */
+             action = dnf_package_get_action(pkg);
+-            if (action == DNF_STATE_ACTION_UNKNOWN)
++            if (action == DNF_STATE_ACTION_UNKNOWN || action == DNF_STATE_ACTION_REINSTALL)
+                 action = DNF_STATE_ACTION_INSTALL;
+ 
+             /* set the pkgid if not already set */
+@@ -641,7 +641,7 @@ dnf_transaction_ts_progress_cb(const void *arg,
+ 
+             /* map to correct action code */
+             action = dnf_package_get_action(pkg);
+-            if (action == DNF_STATE_ACTION_UNKNOWN)
++            if (action == DNF_STATE_ACTION_UNKNOWN || action == DNF_STATE_ACTION_REINSTALL)
+                 action = DNF_STATE_ACTION_REMOVE;
+ 
+             /* remove start */
+@@ -716,7 +716,7 @@ dnf_transaction_ts_progress_cb(const void *arg,
+ 
+             /* map to correct action code */
+             action = dnf_package_get_action(pkg);
+-            if (action == DNF_STATE_ACTION_UNKNOWN)
++            if (action == DNF_STATE_ACTION_UNKNOWN || action == DNF_STATE_ACTION_REINSTALL)
+                 action = DNF_STATE_ACTION_REMOVE;
+ 
+             dnf_state_set_package_progress(
+@@ -1338,6 +1338,15 @@ dnf_transaction_commit(DnfTransaction *transaction, HyGoal goal, DnfState *state
+         g_ptr_array_unref(pkglist);
+     }
+ 
++    /* add reinstalled packages to a helper array which is used to
++     * map removed packages auto-added by rpm to actual DnfPackage's */
++    pkglist = dnf_goal_get_packages(goal, DNF_PACKAGE_INFO_REINSTALL, -1);
++    for (i = 0; i < pkglist->len; i++) {
++        pkg_tmp = static_cast< DnfPackage * >(g_ptr_array_index(pkglist, i));
++        g_ptr_array_add(priv->remove_helper, g_object_ref(pkg_tmp));
++    }
++    g_ptr_array_unref(pkglist);
++
+     /* this section done */
+     ret = dnf_state_done(state, error);
+     if (!ret)
+-- 
+2.45.0
+

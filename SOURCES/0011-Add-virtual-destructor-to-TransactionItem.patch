@@ -1,0 +1,40 @@
+From 74150bafa1ffb8527e8eef7507da50562bcb9983 Mon Sep 17 00:00:00 2001
+From: Nicola Sella <nsella@redhat.com>
+Date: Tue, 26 Mar 2024 14:35:43 +0100
+Subject: [PATCH] Add virtual destructor to TransactionItem
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: e4e90777f789fc45e002b4c0385c0565a76be946
+Resolves: https://issues.redhat.com/browse/RHEL-26240
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/transaction/TransactionItem.hpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libdnf/transaction/TransactionItem.hpp b/libdnf/transaction/TransactionItem.hpp
+index 72684f73..5addad45 100644
+--- a/libdnf/transaction/TransactionItem.hpp
++++ b/libdnf/transaction/TransactionItem.hpp
+@@ -43,6 +43,8 @@ namespace libdnf {
+ 
+ class TransactionItemBase {
+ public:
++    virtual ~TransactionItemBase() = default;
++
+     ItemPtr getItem() const noexcept { return item; }
+     void setItem(ItemPtr value) { item = value; }
+ 
+@@ -101,6 +103,7 @@ public:
+     explicit TransactionItem(Transaction *trans);
+ 
+     TransactionItem(SQLite3Ptr conn, int64_t transID);
++    virtual ~TransactionItem() = default;
+ 
+     int64_t getId() const noexcept { return id; }
+     void setId(int64_t value) { id = value; }
+-- 
+2.44.0
+

@@ -1,4 +1,4 @@
-From a0a32b4c2e2a03ff6ffcb6b7285905ec50892798 Mon Sep 17 00:00:00 2001
+From d264065ec0d574b70bf376d5ee3777d7cc03030f Mon Sep 17 00:00:00 2001
 From: Colin Walters <walters@verbum.org>
 Date: Tue, 4 Jun 2024 06:57:19 -0400
 Subject: [PATCH] repo: Don't try to perform labeling if SELinux is disabled
