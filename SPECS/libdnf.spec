@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              20%{?dist}
+Release:              21%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -113,7 +113,9 @@ Patch47:              0047-filterAdvisory-installed_solvables-sort-RhBug2212838.
 Patch48:              0048-Avoid-reinstal-installonly-packages-marked-for-ERASE.patch
 Patch49:              0049-PGP-Set-a-default-creation-SELinux-labels-on-GnuPG-d.patch
 Patch50:              0050-repo-Don-t-try-to-perform-labeling-if-SELinux-is-dis.patch
-Patch51:              9999-change-bugtracker.diff
+Patch51:              0051-MergedTransaction-Calculate-RPM-difference-between-t.patch
+Patch52:              0052-MergedTransaction-Fix-invalid-memory-access-when-dro.patch
+Patch53:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -364,8 +366,12 @@ popd
 %endif
 
 %changelog
-* Tue Aug 13 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue Jan 28 2025 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
+
+* Fri Dec 06 2024 Petr Pisar <ppisar@redhat.com> - 0.63.0-21
+- Fix calculating a difference between two same-version RPM transactions
+  (RHEL-68770)
 
 * Mon Jun 24 2024 Petr Pisar <ppisar@redhat.com> - 0.63.0-20
 - Do not set a default SELinux creation context if SELinux appears to be
