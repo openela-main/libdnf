@@ -1,0 +1,60 @@
+From 6aad42579f10110b5a483331fbfbde88593f638e Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Thu, 7 Nov 2024 02:34:37 +0000
+Subject: [PATCH] Add `persistence` config option
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: 18a7db66bfc2cf228bdbb484fa92504c2eaefdc6
+Resolves: https://issues.redhat.com/browse/RHEL-78024
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/conf/ConfigMain.cpp | 3 +++
+ libdnf/conf/ConfigMain.hpp | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/libdnf/conf/ConfigMain.cpp b/libdnf/conf/ConfigMain.cpp
+index b40f8dcc..cee6e2cf 100644
+--- a/libdnf/conf/ConfigMain.cpp
++++ b/libdnf/conf/ConfigMain.cpp
+@@ -283,6 +283,7 @@ class ConfigMain::Impl {
+     OptionString comment{nullptr};
+     OptionBool downloadonly{false}; // runtime only option
+     OptionBool ignorearch{false};
++    OptionEnum<std::string> persistence{"auto", {"auto", "persist", "transient"}};
+     OptionString module_platform_id{nullptr};
+     OptionBool module_stream_switch{false};
+     OptionBool module_obsoletes{false};
+@@ -455,6 +456,7 @@ ConfigMain::Impl::Impl(Config & owner)
+     owner.optBinds().add("user_agent", user_agent);
+     owner.optBinds().add("countme", countme);
+     owner.optBinds().add("protect_running_kernel", protect_running_kernel);
++    owner.optBinds().add("persistence", persistence);
+ 
+     // Repo main config
+ 
+@@ -597,6 +599,7 @@ OptionPath & ConfigMain::destdir() { return pImpl->destdir; }
+ OptionString & ConfigMain::comment() { return pImpl->comment; }
+ OptionBool & ConfigMain::downloadonly() { return pImpl->downloadonly; }
+ OptionBool & ConfigMain::ignorearch() { return pImpl->ignorearch; }
++OptionEnum<std::string> & ConfigMain::persistence() { return pImpl->persistence; }
+ 
+ OptionString & ConfigMain::module_platform_id() { return pImpl->module_platform_id; }
+ OptionBool & ConfigMain::module_stream_switch() { return pImpl->module_stream_switch; }
+diff --git a/libdnf/conf/ConfigMain.hpp b/libdnf/conf/ConfigMain.hpp
+index 19395c71..1ef28e7b 100644
+--- a/libdnf/conf/ConfigMain.hpp
++++ b/libdnf/conf/ConfigMain.hpp
+@@ -123,6 +123,7 @@ public:
+     OptionString & comment();
+     OptionBool & downloadonly();
+     OptionBool & ignorearch();
++    OptionEnum<std::string> & persistence();
+ 
+     OptionString & module_platform_id();
+     OptionBool & module_stream_switch();
+-- 
+2.48.1
+

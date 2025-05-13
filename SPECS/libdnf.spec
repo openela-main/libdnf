@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              12%{?dist}
+Release:              13%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -79,7 +79,8 @@ Patch13:              0013-MergedTransaction-Fix-invalid-memory-access-when-dro.
 Patch14:              0014-context-use-rpmtsAddReinstallElement-when-doing-a-re.patch
 Patch15:              0015-Since-we-use-rpmtsAddReinstallElement-rpm-also-unins.patch
 Patch16:              0016-repo-Don-t-try-to-perform-labeling-if-SELinux-is-dis.patch
-Patch17:              9999-change-bugtracker.diff
+Patch17:              0017-Add-persistence-config-option.patch
+Patch18:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -329,8 +330,11 @@ popd
 %endif
 
 %changelog
-* Tue Nov 12 2024 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue May 13 2025 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
+
+* Wed Feb 05 2025 Petr Pisar <ppisar@redhat.com> - 0.69.0-13
+- Add persistence configuration option (RHEL-78024)
 
 * Fri Jun 21 2024 Petr Pisar <ppisar@redhat.com> - 0.69.0-12
 - Do not set a default SELinux creation context if SELinux appears to be
