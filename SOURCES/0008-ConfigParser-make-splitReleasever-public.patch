@@ -1,0 +1,80 @@
+From 73ec298e31c8cd21fe5761a2e838951b2efdbf6f Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Tue, 21 Jan 2025 19:19:06 +0000
+Subject: [PATCH] ConfigParser: make splitReleasever public
+
+Upstream commit: 522793b258da0b1f70c1f380b2c01ddfd27bc193
+Resolves: https://issues.redhat.com/browse/RHEL-68034
+---
+ bindings/swig/conf.i         | 1 +
+ libdnf/conf/ConfigParser.cpp | 6 +++---
+ libdnf/conf/ConfigParser.hpp | 3 +--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/bindings/swig/conf.i b/bindings/swig/conf.i
+index b6a0ce88..c42d5673 100644
+--- a/bindings/swig/conf.i
++++ b/bindings/swig/conf.i
+@@ -199,6 +199,7 @@ public:
+     std::string & getHeader() noexcept;
+     const Container & getData() const noexcept;
+     Container & getData() noexcept;
++    static std::pair<std::string, std::string> splitReleasever(const std::string & releasever);
+ };
+ }
+ %clear std::string & text;
+diff --git a/libdnf/conf/ConfigParser.cpp b/libdnf/conf/ConfigParser.cpp
+index 977da757..186acdc8 100644
+--- a/libdnf/conf/ConfigParser.cpp
++++ b/libdnf/conf/ConfigParser.cpp
+@@ -103,7 +103,7 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+                 if (variable_key == "releasever_major" || variable_key == "releasever_minor") {
+                     const auto releasever_mapping = substitutions.find("releasever");
+                     if (releasever_mapping != substitutions.end()) {
+-                        const auto & releasever_split = ConfigParser::split_releasever(releasever_mapping->second);
++                        const auto & releasever_split = ConfigParser::splitReleasever(releasever_mapping->second);
+                         if (variable_key == "releasever_major") {
+                             variable_value = std::get<0>(releasever_split);
+                             variable_value_has_value = true;
+@@ -231,7 +231,7 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+     return std::make_pair(res, text.length());
+ }
+ 
+-std::tuple<std::string, std::string> ConfigParser::split_releasever(const std::string & releasever)
++std::pair<std::string, std::string> ConfigParser::splitReleasever(const std::string & releasever)
+ {
+     // Uses the same logic as DNF 5 and as splitReleaseverTo in libzypp
+     std::string releasever_major;
+@@ -243,7 +243,7 @@ std::tuple<std::string, std::string> ConfigParser::split_releasever(const std::s
+         releasever_major = releasever.substr(0, pos);
+         releasever_minor = releasever.substr(pos + 1);
+     }
+-    return std::make_tuple(releasever_major, releasever_minor);
++    return std::make_pair(releasever_major, releasever_minor);
+ }
+ 
+ static void read(ConfigParser & cfgParser, IniParser & parser)
+diff --git a/libdnf/conf/ConfigParser.hpp b/libdnf/conf/ConfigParser.hpp
+index 584bd268..de8a0c9d 100644
+--- a/libdnf/conf/ConfigParser.hpp
++++ b/libdnf/conf/ConfigParser.hpp
+@@ -140,6 +140,7 @@ public:
+     std::string & getHeader() noexcept;
+     const Container & getData() const noexcept;
+     Container & getData() noexcept;
++    static std::pair<std::string, std::string> splitReleasever(const std::string & releasever);
+ 
+ private:
+     std::map<std::string, std::string> substitutions;
+@@ -159,8 +160,6 @@ private:
+     static std::pair<std::string, size_t> substitute_expression(const std::string & text,
+         const std::map<std::string, std::string> & substitutions,
+         unsigned int depth);
+-
+-    static std::tuple<std::string, std::string> split_releasever(const std::string & releasever);
+ };
+ 
+ inline void ConfigParser::setSubstitutions(const std::map<std::string, std::string> & substitutions)
+-- 
+2.48.1
+

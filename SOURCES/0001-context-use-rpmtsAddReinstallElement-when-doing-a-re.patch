@@ -1,0 +1,229 @@
+From 85432dfd048912083897ab687488087038a9ac96 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Mon, 8 Apr 2024 07:32:31 +0200
+Subject: [PATCH] context: use `rpmtsAddReinstallElement()` when doing a
+ reinstall
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`rpmtsAddInstallElement()` doesn't work for all reinstall cases, such as
+when a package `Provides` and `Conflicts` with the same capability.
+
+Fixes: https://github.com/rpm-software-management/microdnf/issues/137
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ libdnf/dnf-rpmts-private.hpp |   6 ++
+ libdnf/dnf-rpmts.cpp         | 108 +++++++++++++++++++++++------------
+ libdnf/dnf-transaction.cpp   |   8 ++-
+ 3 files changed, 85 insertions(+), 37 deletions(-)
+
+diff --git a/libdnf/dnf-rpmts-private.hpp b/libdnf/dnf-rpmts-private.hpp
+index 94ad6b45..7a8f70fb 100644
+--- a/libdnf/dnf-rpmts-private.hpp
++++ b/libdnf/dnf-rpmts-private.hpp
+@@ -31,4 +31,10 @@ gboolean         dnf_rpmts_add_install_filename2(rpmts           ts,
+                                                  DnfPackage     *pkg,
+                                                  GError         **error);
+ 
++gboolean         dnf_rpmts_add_reinstall_filename(rpmts ts,
++                                                  const gchar *filename,
++                                                  gboolean allow_untrusted,
++                                                  GError **error);
++
++
+ #endif /* __DNF_RPMTS_PRIVATE_HPP */
+diff --git a/libdnf/dnf-rpmts.cpp b/libdnf/dnf-rpmts.cpp
+index ec3d3706..9c0152fc 100644
+--- a/libdnf/dnf-rpmts.cpp
++++ b/libdnf/dnf-rpmts.cpp
+@@ -88,94 +88,132 @@ test_fail_safe(Header * hdr, DnfPackage * pkg, GError **error)
+     return ret;
+ }
+ 
+-gboolean
+-dnf_rpmts_add_install_filename2(rpmts ts,
+-                                const gchar *filename,
+-                                gboolean allow_untrusted,
+-                                gboolean is_update,
+-                                DnfPackage * pkg,
+-                                GError **error) try
+-{
+-    gboolean ret = TRUE;
+-    gint res;
+-    Header hdr;
+-    FD_t fd;
+-
+-    /* open this */
+-    fd = Fopen(filename, "r.ufdio");
+-    res = rpmReadPackageFile(ts, fd, filename, &hdr);
+-
++static gboolean
++result_is_accepted(gint result, gboolean allow_untrusted, const gchar *filename, GError **error) {
+     /* be less strict when we're allowing untrusted transactions */
+     if (allow_untrusted) {
+-        switch(res) {
++        switch(result) {
+         case RPMRC_NOKEY:
+         case RPMRC_NOTFOUND:
+         case RPMRC_NOTTRUSTED:
+         case RPMRC_OK:
+-            break;
++            return TRUE;
+         case RPMRC_FAIL:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("signature does not verify for %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         default:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("failed to open(generic error): %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         }
+     } else {
+-        switch(res) {
++        switch(result) {
+         case RPMRC_OK:
+-            break;
++            return TRUE;
+         case RPMRC_NOTTRUSTED:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("failed to verify key for %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         case RPMRC_NOKEY:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("public key unavailable for %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         case RPMRC_NOTFOUND:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("signature not found for %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         case RPMRC_FAIL:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("signature does not verify for %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         default:
+-            ret = FALSE;
+             g_set_error(error,
+                         DNF_ERROR,
+                         DNF_ERROR_INTERNAL_ERROR,
+                         _("failed to open(generic error): %s"),
+                         filename);
+-            goto out;
++            return FALSE;
+         }
+     }
++}
++
++gboolean
++dnf_rpmts_add_reinstall_filename(rpmts ts,
++                                 const gchar *filename,
++                                 gboolean allow_untrusted,
++                                 GError **error) try
++{
++    gboolean ret = TRUE;
++    gint res;
++    Header hdr;
++    FD_t fd;
++
++    /* open this */
++    fd = Fopen(filename, "r.ufdio");
++    res = rpmReadPackageFile(ts, fd, filename, &hdr);
++
++    if (!result_is_accepted(res, allow_untrusted, filename, error)) {
++        ret = FALSE;
++        goto out;
++    }
++
++    /* add to the transaction */
++    res = rpmtsAddReinstallElement(ts, hdr, (fnpyKey) filename);
++    if (res != 0) {
++        ret = FALSE;
++        g_set_error(error,
++                    DNF_ERROR,
++                    DNF_ERROR_INTERNAL_ERROR,
++                    _("failed to add reinstall element: %1$s [%2$i]"),
++                    filename, res);
++        goto out;
++    }
++out:
++    Fclose(fd);
++    headerFree(hdr);
++    return ret;
++} CATCH_TO_GERROR(FALSE)
++
++gboolean
++dnf_rpmts_add_install_filename2(rpmts ts,
++                                const gchar *filename,
++                                gboolean allow_untrusted,
++                                gboolean is_update,
++                                DnfPackage * pkg,
++                                GError **error) try
++{
++    gboolean ret = TRUE;
++    gint res;
++    Header hdr;
++    FD_t fd;
++
++    /* open this */
++    fd = Fopen(filename, "r.ufdio");
++    res = rpmReadPackageFile(ts, fd, filename, &hdr);
++
++    if (!result_is_accepted(res, allow_untrusted, filename, error)) {
++        ret = FALSE;
++        goto out;
++    }
+     if (pkg) {
+         if (!test_fail_safe(&hdr, pkg, error)) {
+             ret = FALSE;
+diff --git a/libdnf/dnf-transaction.cpp b/libdnf/dnf-transaction.cpp
+index c4c5e02b..35b2ff95 100644
+--- a/libdnf/dnf-transaction.cpp
++++ b/libdnf/dnf-transaction.cpp
+@@ -1222,8 +1222,12 @@ dnf_transaction_commit(DnfTransaction *transaction, HyGoal goal, DnfState *state
+         filename = dnf_package_get_filename(pkg);
+         allow_untrusted = (priv->flags & DNF_TRANSACTION_FLAG_ONLY_TRUSTED) == 0;
+         is_update = action == DNF_STATE_ACTION_UPDATE || action == DNF_STATE_ACTION_DOWNGRADE;
+-        ret = dnf_rpmts_add_install_filename2(
+-            priv->ts, filename, allow_untrusted, is_update, pkg, error);
++        if (action == DNF_STATE_ACTION_REINSTALL) {
++            ret = dnf_rpmts_add_reinstall_filename(priv->ts, filename, allow_untrusted, error);
++        } else {
++            ret = dnf_rpmts_add_install_filename2(
++                priv->ts, filename, allow_untrusted, is_update, pkg, error);
++        }
+         if (!ret)
+             goto out;
+ 
+-- 
+2.45.2
+

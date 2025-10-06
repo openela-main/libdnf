@@ -1,0 +1,42 @@
+From 18f49a49be14f80233613710e84dda47c5958252 Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Tue, 7 May 2024 16:28:59 +0000
+Subject: [PATCH] Add tests for shell-style variable expansion
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ tests/libdnf/conf/ConfigParserTest.cpp | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/tests/libdnf/conf/ConfigParserTest.cpp b/tests/libdnf/conf/ConfigParserTest.cpp
+index 70278196..1448d8d3 100644
+--- a/tests/libdnf/conf/ConfigParserTest.cpp
++++ b/tests/libdnf/conf/ConfigParserTest.cpp
+@@ -30,4 +30,21 @@ void ConfigParserTest::testConfigParserReleasever()
+         libdnf::ConfigParser::substitute(text, substitutions);
+         CPPUNIT_ASSERT(text == "major: , minor: ");
+     }
++    {
++        std::map<std::string, std::string> substitutions = {
++            {"var1", "value123"},
++            {"var2", "456"},
++        };
++        std::string text = "foo$var1-bar";
++        libdnf::ConfigParser::substitute(text, substitutions);
++        CPPUNIT_ASSERT(text == "foovalue123-bar");
++
++        text = "${var1:+alternate}-${unset:-default}-${nn:+n${nn:-${nnn:}";
++        libdnf::ConfigParser::substitute(text, substitutions);
++        CPPUNIT_ASSERT(text == "alternate-default-${nn:+n${nn:-${nnn:}");
++
++        text = "${unset:-${var1:+${var2:+$var2}}}";
++        libdnf::ConfigParser::substitute(text, substitutions);
++        CPPUNIT_ASSERT(text == "456");
++    }
+ }
+-- 
+2.45.2
+
