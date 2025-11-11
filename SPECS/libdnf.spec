@@ -56,7 +56,7 @@
 
 Name:           libdnf
 Version:        %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:        9%{?dist}
+Release:        12%{?dist}
 Summary:        Library providing simplified C and Python API to libsolv
 License:        LGPL-2.1-or-later
 URL:            https://github.com/rpm-software-management/libdnf
@@ -74,6 +74,11 @@ Patch10:        0010-C-API-Detect-releasever_major-releasever_minor-from-.patch
 Patch11:        0011-C-API-Use-releasever_-major-minor-from-context-inste.patch
 Patch12:        0012-C-API-support-shell-style-variable-substitution.patch
 Patch13:        0013-C-API-test-shell-style-variable-expressions.patch
+Patch14:        0014-conf-Improve-granularity-of-ConfigParser-exceptions.patch
+Patch15:        0015-module-Warn-if-module-config-file-is-inaccessible.patch
+Patch16:        0016-history-DB-Add-persistence-column.patch
+Patch17:        0017-MergedTransaction-listPersistences.patch
+Patch18:        0018-conf-Add-usr_drift_protected_paths.patch
 
 BuildRequires:  cmake
 BuildRequires:  gcc
@@ -317,6 +322,16 @@ popd
 %endif
 
 %changelog
+* Thu Jun 26 2025 Evan Goode <egoode@redhat.com> - 0.73.1-12
+- Bump version due to failed build
+
+* Tue Jun 24 2025 Evan Goode <egoode@redhat.com> - 0.73.1-11
+- history DB: Add "persistence" column (RHEL-99825)
+- conf: Add bootc_unsafe_paths (RHEL-99826)
+
+* Thu Mar 20 2025 Marek Blaha <mblaha@redhat.com> - 0.73.1-10
+- module: Warn if module config file is inaccessible (RHEL-83804)
+
 * Mon Mar 10 2025 Evan Goode <egoode@redhat.com> - 0.73.1-9
 - Support releasever_{major,minor}, shell-style variable substitution (RHEL-74025)
 

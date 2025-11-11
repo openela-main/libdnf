@@ -1,0 +1,66 @@
+From fd638c7b0110547da1ea7ea994f695078db603a1 Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Wed, 28 May 2025 20:39:20 +0000
+Subject: [PATCH 3/3] conf: Add usr_drift_protected_paths
+
+Adds the `usr_drift_protected_paths` configuration option which can be
+configured by adding .conf files to the drop-in directory
+/etc/dnf/usr-drift-protected-paths.d, similar to /etc/dnf/protected.d.
+Distributions will be able to add paths that are known to cause problems
+when their contents drift with respect to /usr, e.g. /etc/pam.d.
+
+For https://github.com/rpm-software-management/dnf/issues/2199.
+---
+ libdnf/conf/ConfigMain.cpp | 9 +++++++++
+ libdnf/conf/ConfigMain.hpp | 1 +
+ 2 files changed, 10 insertions(+)
+
+diff --git a/libdnf/conf/ConfigMain.cpp b/libdnf/conf/ConfigMain.cpp
+index b58b2f47..fac8bbee 100644
+--- a/libdnf/conf/ConfigMain.cpp
++++ b/libdnf/conf/ConfigMain.cpp
+@@ -293,6 +293,8 @@ class ConfigMain::Impl {
+     OptionBool countme{false};
+     OptionBool protect_running_kernel{true};
+ 
++    OptionStringList usr_drift_protected_paths{resolveGlobs("glob:/etc/dnf/usr-drift-protected-paths.d/*.conf")};
++
+     // Repo main config
+ 
+     OptionNumber<std::uint32_t> retries{10};
+@@ -460,6 +462,12 @@ ConfigMain::Impl::Impl(Config & owner)
+     owner.optBinds().add("countme", countme);
+     owner.optBinds().add("protect_running_kernel", protect_running_kernel);
+     owner.optBinds().add("persistence", persistence);
++    owner.optBinds().add("usr_drift_protected_paths", usr_drift_protected_paths,
++        [&](Option::Priority priority, const std::string & value){
++            if (priority >= usr_drift_protected_paths.getPriority())
++                usr_drift_protected_paths.set(priority, resolveGlobs(value));
++        }, nullptr, false
++    );
+ 
+     // Repo main config
+ 
+@@ -616,6 +624,7 @@ OptionString & ConfigMain::comment() { return pImpl->comment; }
+ OptionBool & ConfigMain::downloadonly() { return pImpl->downloadonly; }
+ OptionBool & ConfigMain::ignorearch() { return pImpl->ignorearch; }
+ OptionEnum<std::string> & ConfigMain::persistence() { return pImpl->persistence; }
++OptionStringList & ConfigMain::usr_drift_protected_paths() { return pImpl->usr_drift_protected_paths; }
+ 
+ OptionString & ConfigMain::module_platform_id() { return pImpl->module_platform_id; }
+ OptionBool & ConfigMain::module_stream_switch() { return pImpl->module_stream_switch; }
+diff --git a/libdnf/conf/ConfigMain.hpp b/libdnf/conf/ConfigMain.hpp
+index af6496f3..b9d68939 100644
+--- a/libdnf/conf/ConfigMain.hpp
++++ b/libdnf/conf/ConfigMain.hpp
+@@ -126,6 +126,7 @@ public:
+     OptionBool & downloadonly();
+     OptionBool & ignorearch();
+     OptionEnum<std::string> & persistence();
++    OptionStringList & usr_drift_protected_paths();
+ 
+     OptionString & module_platform_id();
+     OptionBool & module_stream_switch();
+-- 
+2.49.0
+

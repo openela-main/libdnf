@@ -1,0 +1,107 @@
+From 0ab70d74fbdd1960a93a25bca9be8bea2dcdab4f Mon Sep 17 00:00:00 2001
+From: Marek Blaha <mblaha@redhat.com>
+Date: Fri, 7 Feb 2025 09:52:13 +0100
+Subject: [PATCH 14/15] conf: Improve granularity of ConfigParser exceptions
+
+In some cases, we need to distinguish between a missing config file and
+one that exists but is unreadable (e.g., due to insufficient
+permissions).
+
+This patch introduces a new FileDoesNotExist exception class, which is a
+more specific subclass of the existing CantOpenFile class. This ensures
+that any existing workflows remain unaffected.
+
+Upstream commit: b5d48a6
+---
+ libdnf/conf/ConfigParser.cpp         |  2 ++
+ libdnf/conf/ConfigParser.hpp         |  3 +++
+ libdnf/utils/iniparser/iniparser.cpp | 15 ++++++++++++++-
+ libdnf/utils/iniparser/iniparser.hpp |  4 ++++
+ 4 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/libdnf/conf/ConfigParser.cpp b/libdnf/conf/ConfigParser.cpp
+index 186acdc8..6ff110a7 100644
+--- a/libdnf/conf/ConfigParser.cpp
++++ b/libdnf/conf/ConfigParser.cpp
+@@ -271,6 +271,8 @@ void ConfigParser::read(const std::string & filePath)
+     try {
+         IniParser parser(filePath);
+         ::libdnf::read(*this, parser);
++    } catch (const IniParser::FileDoesNotExist & e) {
++        throw FileDoesNotExist(e.what());
+     } catch (const IniParser::CantOpenFile & e) {
+         throw CantOpenFile(e.what());
+     } catch (const IniParser::Exception & e) {
+diff --git a/libdnf/conf/ConfigParser.hpp b/libdnf/conf/ConfigParser.hpp
+index de8a0c9d..2d269147 100644
+--- a/libdnf/conf/ConfigParser.hpp
++++ b/libdnf/conf/ConfigParser.hpp
+@@ -55,6 +55,9 @@ public:
+     struct CantOpenFile : public Exception {
+         CantOpenFile(const std::string & what) : Exception(what) {}
+     };
++    struct FileDoesNotExist : public CantOpenFile {
++        FileDoesNotExist(const std::string & what) : CantOpenFile(what) {}
++    };
+     struct ParsingError : public Exception {
+         ParsingError(const std::string & what) : Exception(what) {}
+     };
+diff --git a/libdnf/utils/iniparser/iniparser.cpp b/libdnf/utils/iniparser/iniparser.cpp
+index 1109c120..3c537826 100644
+--- a/libdnf/utils/iniparser/iniparser.cpp
++++ b/libdnf/utils/iniparser/iniparser.cpp
+@@ -20,6 +20,9 @@
+ 
+ #include "iniparser.hpp"
+ 
++#include <errno.h>
++#include <sys/stat.h>
++
+ constexpr char DELIMITER = '\n';
+ 
+ const char * IniParser::CantOpenFile::what() const noexcept
+@@ -27,6 +30,11 @@ const char * IniParser::CantOpenFile::what() const noexcept
+     return "IniParser: Can't open file";
+ }
+ 
++const char * IniParser::FileDoesNotExist::what() const noexcept
++{
++    return "IniParser: File does not exist";
++}
++
+ const char * IniParser::MissingSectionHeader::what() const noexcept
+ {
+     return "IniParser: Missing section header";
+@@ -65,8 +73,13 @@ const char * IniParser::MissingEqual::what() const noexcept
+ IniParser::IniParser(const std::string & filePath)
+ : is(new std::ifstream(filePath))
+ {
+-    if (!(*is))
++    if (!(*is)) {
++        struct stat buffer;
++        if (stat(filePath.c_str(), &buffer) != 0 && errno == ENOENT) {
++            throw FileDoesNotExist();
++        }
+         throw CantOpenFile();
++    }
+     is->exceptions(std::ifstream::badbit);
+     lineNumber = 0;
+     lineReady = false;
+diff --git a/libdnf/utils/iniparser/iniparser.hpp b/libdnf/utils/iniparser/iniparser.hpp
+index a6635c6b..57494a18 100644
+--- a/libdnf/utils/iniparser/iniparser.hpp
++++ b/libdnf/utils/iniparser/iniparser.hpp
+@@ -46,6 +46,10 @@ public:
+         CantOpenFile() {}
+         const char * what() const noexcept override;
+     };
++    struct FileDoesNotExist : public CantOpenFile {
++        FileDoesNotExist() {}
++        const char * what() const noexcept override;
++    };
+     struct MissingSectionHeader : public Exception {
+         MissingSectionHeader(int lineNumber) : Exception(lineNumber) {}
+         const char * what() const noexcept override;
+-- 
+2.48.1
+
