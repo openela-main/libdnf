@@ -1,0 +1,148 @@
+From 89053c30a56da51849ffd5f4323ba3ef04eb8fcd Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Mon, 9 Oct 2023 21:16:57 +0000
+Subject: [PATCH 02/11] [conf] split $releasever to $releasever_major and
+ $releasever_minor
+
+This functionality is also implemented in DNF 4, but direct consumers of
+libdnf (PackageKit, microdnf) also need it.
+
+DNF 4 PR: https://github.com/rpm-software-management/dnf/pull/1989
+
+For https://bugzilla.redhat.com/show_bug.cgi?id=1789346
+---
+ libdnf/conf/ConfigParser.cpp     | 50 +++++++++++++++++++++++++-------
+ libdnf/conf/ConfigParser.hpp     |  2 ++
+ tests/libdnf/conf/CMakeLists.txt | 11 +++++++
+ 3 files changed, 53 insertions(+), 10 deletions(-)
+ create mode 100644 tests/libdnf/conf/CMakeLists.txt
+
+diff --git a/libdnf/conf/ConfigParser.cpp b/libdnf/conf/ConfigParser.cpp
+index e5d6b3b7..a89fd8bf 100644
+--- a/libdnf/conf/ConfigParser.cpp
++++ b/libdnf/conf/ConfigParser.cpp
+@@ -92,7 +92,27 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+             auto pos_after_variable = static_cast<size_t>(std::distance(res.begin(), it));
+ 
+             // Find the substituting string and the end of the variable expression
+-            auto variable_mapping = substitutions.find(res.substr(pos_variable, pos_after_variable - pos_variable));
++            const auto & variable_key = res.substr(pos_variable, pos_after_variable - pos_variable);
++            const auto variable_mapping = substitutions.find(variable_key);
++
++            const std::string * variable_value = nullptr;
++
++            if (variable_mapping == substitutions.end()) {
++                if (variable_key == "releasever_major" || variable_key == "releasever_minor") {
++                    const auto releasever_mapping = substitutions.find("releasever");
++                    if (releasever_mapping != substitutions.end()) {
++                        const auto & releasever_split = ConfigParser::split_releasever(releasever_mapping->second);
++                        if (variable_key == "releasever_major") {
++                            variable_value = &std::get<0>(releasever_split);
++                        } else {
++                            variable_value = &std::get<1>(releasever_split);
++                        }
++                    }
++                }
++            } else {
++                variable_value = &variable_mapping->second;
++            }
++
+             const std::string * subst_str = nullptr;
+ 
+             size_t pos_after_variable_expression;
+@@ -133,16 +153,16 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+                         // If variable is unset or empty, the expansion of word is
+                         // substituted. Otherwise, the value of variable is
+                         // substituted.
+-                        if (variable_mapping == substitutions.end() || variable_mapping->second.empty()) {
++                        if (variable_value == nullptr || variable_value->empty()) {
+                             subst_str = &expanded_word;
+                         } else {
+-                            subst_str = &variable_mapping->second;
++                            subst_str = variable_value;
+                         }
+                     } else if (expansion_mode == '+') {
+                         // ${variable:+word} (alternate value)
+                         // If variable is unset or empty nothing is substituted.
+                         // Otherwise, the expansion of word is substituted.
+-                        if (variable_mapping == substitutions.end() || variable_mapping->second.empty()) {
++                        if (variable_value == nullptr || variable_value->empty()) {
+                             const std::string empty{};
+                             subst_str = &empty;
+                         } else {
+@@ -156,9 +176,7 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+                     pos_after_variable_expression = pos_after_word + 1;
+                 } else if (res[pos_after_variable] == '}') {
+                     // ${variable}
+-                    if (variable_mapping != substitutions.end()) {
+-                        subst_str = &variable_mapping->second;
+-                    }
++                    subst_str = variable_value;
+                     // Move past the closing '}'
+                     pos_after_variable_expression = pos_after_variable + 1;
+                 } else {
+@@ -168,9 +186,7 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+                 }
+             } else {
+                 // No braces, we have a $variable
+-                if (variable_mapping != substitutions.end()) {
+-                    subst_str = &variable_mapping->second;
+-                }
++                subst_str = variable_value;
+                 pos_after_variable_expression = pos_after_variable;
+             }
+ 
+@@ -199,6 +215,20 @@ std::pair<std::string, size_t> ConfigParser::substitute_expression(const std::st
+     return std::make_pair(res, text.length());
+ }
+ 
++std::tuple<std::string, std::string> ConfigParser::split_releasever(const std::string & releasever)
++{
++    // Uses the same logic as DNF 5 and as splitReleaseverTo in libzypp
++    std::string releasever_major;
++    std::string releasever_minor;
++    const auto pos = releasever.find('.');
++    if (pos == std::string::npos) {
++        releasever_major = releasever;
++    } else {
++        releasever_major = releasever.substr(0, pos);
++        releasever_minor = releasever.substr(pos + 1);
++    }
++    return std::make_tuple(releasever_major, releasever_minor);
++}
+ 
+ static void read(ConfigParser & cfgParser, IniParser & parser)
+ {
+diff --git a/libdnf/conf/ConfigParser.hpp b/libdnf/conf/ConfigParser.hpp
+index f3d10061..f30dd4a4 100644
+--- a/libdnf/conf/ConfigParser.hpp
++++ b/libdnf/conf/ConfigParser.hpp
+@@ -162,6 +162,8 @@ private:
+     static std::pair<std::string, size_t> substitute_expression(const std::string & text,
+         const std::map<std::string, std::string> & substitutions,
+         unsigned int depth);
++
++    static std::tuple<std::string, std::string> split_releasever(const std::string & releasever);
+ };
+ 
+ inline void ConfigParser::setSubstitutions(const std::map<std::string, std::string> & substitutions)
+diff --git a/tests/libdnf/conf/CMakeLists.txt b/tests/libdnf/conf/CMakeLists.txt
+new file mode 100644
+index 00000000..05058367
+--- /dev/null
++++ b/tests/libdnf/conf/CMakeLists.txt
+@@ -0,0 +1,11 @@
++set(LIBDNF_TEST_SOURCES
++    ${LIBDNF_TEST_SOURCES}
++    ${CMAKE_CURRENT_SOURCE_DIR}/ConfigParserTest.cpp
++    PARENT_SCOPE
++)
++
++set(LIBDNF_TEST_HEADERS
++    ${LIBDNF_TEST_HEADERS}
++    ${CMAKE_CURRENT_SOURCE_DIR}/ConfigParserTest.hpp
++    PARENT_SCOPE
++)
+-- 
+2.49.0
+

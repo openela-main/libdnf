@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              13%{?dist}
+Release:              16%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -80,7 +80,23 @@ Patch14:              0014-context-use-rpmtsAddReinstallElement-when-doing-a-re.
 Patch15:              0015-Since-we-use-rpmtsAddReinstallElement-rpm-also-unins.patch
 Patch16:              0016-repo-Don-t-try-to-perform-labeling-if-SELinux-is-dis.patch
 Patch17:              0017-Add-persistence-config-option.patch
-Patch18:              9999-change-bugtracker.diff
+Patch18:              0018-conf-Improve-granularity-of-ConfigParser-exceptions.patch
+Patch19:              0019-module-Warn-if-module-config-file-is-inaccessible.patch
+Patch20:              0020-history-DB-Add-persistence-column.patch
+Patch21:              0021-MergedTransaction-listPersistences.patch
+Patch22:              0022-conf-Add-usr_drift_protected_paths.patch
+Patch23:              0023-conf-Add-limited-shell-style-variable-expansion.patch
+Patch24:              0024-conf-split-releasever-to-releasever_major-and-releas.patch
+Patch25:              0025-Test-for-releasever_major-releasever_minor.patch
+Patch26:              0026-ConfigParser-fix-use-out-of-scope-leaks.patch
+Patch27:              0027-Add-tests-for-shell-style-variable-expansion.patch
+Patch28:              0028-Split-releasever-to-releasever_major-and-releasever_.patch
+Patch29:              0029-ConfigParser-make-splitReleasever-public.patch
+Patch30:              0030-C-API-Detect-releasever_major-releasever_minor-from-.patch
+Patch31:              0031-C-API-Use-releasever_-major-minor-from-context-inste.patch
+Patch32:              0032-C-API-support-shell-style-variable-substitution.patch
+Patch33:              0033-C-API-test-shell-style-variable-expressions.patch
+Patch34:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -330,8 +346,19 @@ popd
 %endif
 
 %changelog
-* Tue May 13 2025 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue Nov 11 2025 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
+
+* Mon Jun 30 2025 Evan Goode <egoode@redhat.com> - 0.69.0-16
+- Introduce $releasever_major, $releasever_minor variables, shell-style
+  variable substitution (RHEL-95006)
+
+* Thu Jun 26 2025 Evan Goode <egoode@redhat.com> - 0.69.0-15
+- history DB: Add "persistence" column (RHEL-100623)
+- conf: Add bootc_unsafe_paths (RHEL-100622)
+
+* Wed Mar 12 2025 Marek Blaha <mblaha@redhat.com> - 0.69.0-14
+- module: Warn if module config file is inaccessible (RHEL-62833)
 
 * Wed Feb 05 2025 Petr Pisar <ppisar@redhat.com> - 0.69.0-13
 - Add persistence configuration option (RHEL-78024)

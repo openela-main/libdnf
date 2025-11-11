@@ -1,0 +1,156 @@
+From a131207df220a5f81e57f1a61931b0fdcba3325c Mon Sep 17 00:00:00 2001
+From: Diego Herrera <dherrera@redhat.com>
+Date: Thu, 16 Jan 2025 18:29:40 -0300
+Subject: [PATCH 06/11] Split $releasever to $releasever_major and
+ $releasever_minor in c api
+
+---
+ libdnf/dnf-repo.cpp          |  6 ++++-
+ libdnf/dnf-utils.cpp         | 44 ++++++++++++++++++++++++++++++++++++
+ libdnf/dnf-utils.h           |  3 +++
+ tests/libdnf/dnf-self-test.c | 27 ++++++++++++++++++++++
+ 4 files changed, 79 insertions(+), 1 deletion(-)
+
+diff --git a/libdnf/dnf-repo.cpp b/libdnf/dnf-repo.cpp
+index 48434fd9..17aa04be 100644
+--- a/libdnf/dnf-repo.cpp
++++ b/libdnf/dnf-repo.cpp
+@@ -1191,6 +1191,8 @@ dnf_repo_setup(DnfRepo *repo, GError **error) try
+     DnfRepoEnabled enabled = DNF_REPO_ENABLED_NONE;
+     g_autofree gchar *basearch = NULL;
+     g_autofree gchar *release = NULL;
++    g_autofree gchar *major = NULL;
++    g_autofree gchar *minor = NULL;
+ 
+     basearch = g_key_file_get_string(priv->keyfile, "general", "arch", NULL);
+     if (basearch == NULL)
+@@ -1218,9 +1220,11 @@ dnf_repo_setup(DnfRepo *repo, GError **error) try
+         return FALSE;
+     if (!lr_handle_setopt(priv->repo_handle, error, LRO_INTERRUPTIBLE, 0L))
+         return FALSE;
++    dnf_split_releasever(release, &major, &minor);
+     priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever", release);
++    priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever_major", major);
++    priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever_minor", minor);
+     priv->urlvars = lr_urlvars_set(priv->urlvars, "basearch", basearch);
+-
+     /* Call libdnf::dnf_context_load_vars(priv->context); only when values not in cache.
+      * But what about if variables on disk change during long running programs (PackageKit daemon)?
+      * if (!libdnf::dnf_context_get_vars_cached(priv->context))
+diff --git a/libdnf/dnf-utils.cpp b/libdnf/dnf-utils.cpp
+index 874282cf..43c84b82 100644
+--- a/libdnf/dnf-utils.cpp
++++ b/libdnf/dnf-utils.cpp
+@@ -84,6 +84,50 @@ dnf_realpath(const gchar *path)
+     return real;
+ }
+ 
++/**
++ * dnf_split_releasever:
++ * @releasever: A releasever string
++ * @releasever_major: Output string, or %NULL
++ * @releasever_minor: Output string, or %NULL
++ *
++ * Splits a releasever string into mayor and minor
++ * using the same logic as DNF 5 and as splitReleaseverTo in libzypp.
++ **/
++void
++dnf_split_releasever(const gchar *releasever, 
++                     gchar **releasever_major,
++                     gchar **releasever_minor)
++{
++    g_autofree gchar** result = NULL;
++
++    // Uses the same logic as DNF 5 and as splitReleaseverTo in libzypp
++    result = g_strsplit(releasever, ".", 2);
++
++    if(result[0] == NULL) {
++        if(releasever_major != NULL)
++            *releasever_major = g_strdup("");
++        if(releasever_minor != NULL)
++            *releasever_minor = g_strdup("");
++        return;
++    }
++    else {
++        if(releasever_major != NULL)
++            *releasever_major = result[0];
++        else
++            g_free(result[0]);
++    }
++
++    if(result[1] == NULL) {
++        if(releasever_minor != NULL)
++            *releasever_minor = g_strdup("");
++    } else {
++        if(releasever_minor != NULL)
++            *releasever_minor = result[1];
++        else
++            g_free(result[1]);
++    }
++}
++
+ /**
+  * dnf_remove_recursive:
+  * @directory: A directory path
+diff --git a/libdnf/dnf-utils.h b/libdnf/dnf-utils.h
+index 6b711918..c10dd53f 100644
+--- a/libdnf/dnf-utils.h
++++ b/libdnf/dnf-utils.h
+@@ -53,6 +53,9 @@ extern "C" {
+ #endif
+ 
+ gchar           *dnf_realpath                       (const gchar            *path);
++void             dnf_split_releasever               (const gchar            *releasever, 
++                                                     gchar                  **releasever_major,
++                                                     gchar                  **releasever_minor);
+ gboolean         dnf_remove_recursive               (const gchar            *directory,
+                                                      GError                 **error);
+ gboolean         dnf_ensure_file_unlinked           (const gchar            *src_path,
+diff --git a/tests/libdnf/dnf-self-test.c b/tests/libdnf/dnf-self-test.c
+index 1e2bfac3..2a0371c9 100644
+--- a/tests/libdnf/dnf-self-test.c
++++ b/tests/libdnf/dnf-self-test.c
+@@ -188,6 +188,32 @@ dnf_lock_threads_func(void)
+     g_object_unref(lock);
+ }
+ 
++static void
++dnf_split_releasever_func(void)
++{
++    gchar *major, *minor;
++    dnf_split_releasever("1.23.45", &major, &minor);
++    g_assert_cmpstr(major, ==, "1");
++    g_assert_cmpstr(minor, ==, "23.45");
++    g_free(major);
++    g_free(minor);
++    dnf_split_releasever("6.789", &major, &minor);
++    g_assert_cmpstr(major, ==, "6");
++    g_assert_cmpstr(minor, ==, "789");
++    g_free(major);
++    g_free(minor);
++    dnf_split_releasever("10", &major, &minor);
++    g_assert_cmpstr(major, ==, "10");
++    g_assert_cmpstr(minor, ==, "");
++    g_free(major);
++    g_free(minor);
++    dnf_split_releasever("", &major, &minor);
++    g_assert_cmpstr(major, ==, "");
++    g_assert_cmpstr(minor, ==, "");
++    g_free(major);
++    g_free(minor);
++}
++
+ static void
+ ch_test_repo_func(void)
+ {
+@@ -1239,6 +1265,7 @@ main(int argc, char **argv)
+     g_test_add_func("/libdnf/context{cache-clean-check}", dnf_context_cache_clean_check_func);
+     g_test_add_func("/libdnf/lock", dnf_lock_func);
+     g_test_add_func("/libdnf/lock[threads]", dnf_lock_threads_func);
++    g_test_add_func("/libdnf/split_releasever", dnf_split_releasever_func);
+     g_test_add_func("/libdnf/repo", ch_test_repo_func);
+     g_test_add_func("/libdnf/repo_empty_keyfile", dnf_repo_setup_with_empty_keyfile);
+     g_test_add_func("/libdnf/state", dnf_state_func);
+-- 
+2.49.0
+

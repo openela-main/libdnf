@@ -1,0 +1,80 @@
+From bb6638eafa4c82cbbc672645dbf30575e7453b15 Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Fri, 7 Feb 2025 18:42:43 +0000
+Subject: [PATCH 11/11] C API: test shell-style variable expressions
+
+---
+ data/tests/vars/var1                        |  1 +
+ data/tests/vars/var2                        |  1 +
+ data/tests/yum.repos.d/shell-expansion.repo |  5 +++++
+ tests/libdnf/dnf-self-test.c                | 10 ++++++++++
+ 4 files changed, 17 insertions(+)
+ create mode 100644 data/tests/vars/var1
+ create mode 100644 data/tests/vars/var2
+ create mode 100644 data/tests/yum.repos.d/shell-expansion.repo
+
+diff --git a/data/tests/vars/var1 b/data/tests/vars/var1
+new file mode 100644
+index 00000000..a9f37252
+--- /dev/null
++++ b/data/tests/vars/var1
+@@ -0,0 +1 @@
++value123
+diff --git a/data/tests/vars/var2 b/data/tests/vars/var2
+new file mode 100644
+index 00000000..8d38505c
+--- /dev/null
++++ b/data/tests/vars/var2
+@@ -0,0 +1 @@
++456
+diff --git a/data/tests/yum.repos.d/shell-expansion.repo b/data/tests/yum.repos.d/shell-expansion.repo
+new file mode 100644
+index 00000000..3bd4c1ec
+--- /dev/null
++++ b/data/tests/yum.repos.d/shell-expansion.repo
+@@ -0,0 +1,5 @@
++[shell-expansion]
++name=${unset:-${var1:+${var2:+$var2}}}
++baseurl=https://${unset:-${var1:+${var2:+$var2}}}
++enabled=1
++gpgcheck=0
+diff --git a/tests/libdnf/dnf-self-test.c b/tests/libdnf/dnf-self-test.c
+index 2a0371c9..1596870e 100644
+--- a/tests/libdnf/dnf-self-test.c
++++ b/tests/libdnf/dnf-self-test.c
+@@ -842,6 +842,7 @@ dnf_repo_loader_func(void)
+     DnfState *state;
+     gboolean ret;
+     g_autofree gchar *repos_dir = NULL;
++    g_autofree gchar *vars_dir = NULL;
+     g_autoptr(DnfContext) ctx = NULL;
+     g_autoptr(DnfRepoLoader) repo_loader = NULL;
+     guint metadata_expire;
+@@ -849,8 +850,10 @@ dnf_repo_loader_func(void)
+     /* set up local context */
+     ctx = dnf_context_new();
+     repos_dir = dnf_test_get_filename("yum.repos.d");
++    vars_dir = dnf_test_get_filename("vars");
+     dnf_context_set_repo_dir(ctx, repos_dir);
+     dnf_context_set_solv_dir(ctx, "/tmp");
++    dnf_context_set_vars_dir(ctx, (const gchar *[]){vars_dir, NULL});
+     ret = dnf_context_setup(ctx, NULL, &error);
+     g_assert_no_error(error);
+     g_assert(ret);
+@@ -906,6 +909,13 @@ dnf_repo_loader_func(void)
+     g_assert_error(error, DNF_ERROR, DNF_ERROR_REPO_NOT_AVAILABLE);
+     g_assert(!ret);
+     g_clear_error(&error);
++
++    /* check that shell-style variable expressions are correctly expanded in repo values */
++    dnf_state_reset(state);
++    repo = dnf_repo_loader_get_repo_by_id(repo_loader, "shell-expansion", &error);
++    g_assert_no_error(error);
++    g_assert(repo != NULL);
++    g_assert_cmpstr(dnf_repo_get_description(repo), ==, "456");
+ }
+ 
+ static void
+-- 
+2.49.0
+

@@ -1,0 +1,121 @@
+From 80f6ccc3f3f28ddc48e1f175e7948b0c1a663337 Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Mon, 3 Feb 2025 16:06:35 -0500
+Subject: [PATCH 09/11] C API: Use releasever_{major,minor} from context
+ instead of always splitting
+
+Introduces dnf_context_get_release_ver_major and
+dnf_context_get_release_ver_minor.
+---
+ libdnf/dnf-context.cpp | 36 ++++++++++++++++++++++++++++++++++++
+ libdnf/dnf-context.h   |  2 ++
+ libdnf/dnf-repo.cpp    | 17 +++++++++++------
+ 3 files changed, 49 insertions(+), 6 deletions(-)
+
+diff --git a/libdnf/dnf-context.cpp b/libdnf/dnf-context.cpp
+index d51cb08c..ffd6b662 100644
+--- a/libdnf/dnf-context.cpp
++++ b/libdnf/dnf-context.cpp
+@@ -620,6 +620,42 @@ dnf_context_get_release_ver(DnfContext *context)
+     return priv->release_ver;
+ }
+ 
++/**
++ * dnf_context_get_release_ver_major:
++ * @context: a #DnfContext instance.
++ *
++ * Gets the release major version. Usually derived by taking the substring of releasever before the
++ * first ".", but can be overridden by the distribution.
++ *
++ * Returns: the release major version, e.g. "10"
++ *
++ * Since: 0.74.0
++ **/
++const gchar *
++dnf_context_get_release_ver_major(DnfContext *context)
++{
++    DnfContextPrivate *priv = GET_PRIVATE(context);
++    return priv->release_ver_major;
++}
++
++/**
++ * dnf_context_get_release_ver_minor:
++ * @context: a #DnfContext instance.
++ *
++ * Gets the release minor version. Usually derived by taking the substring of releasever after the
++ * first ".", but can be overridden by the distribution.
++ *
++ * Returns: the release minor version, e.g. "1"
++ *
++ * Since: 0.74.0
++ **/
++const gchar *
++dnf_context_get_release_ver_minor(DnfContext *context)
++{
++    DnfContextPrivate *priv = GET_PRIVATE(context);
++    return priv->release_ver_minor;
++}
++
+ /**
+  * dnf_context_get_platform_module:
+  * @context: a #DnfContext instance.
+diff --git a/libdnf/dnf-context.h b/libdnf/dnf-context.h
+index 4d8481b2..8e1c948e 100644
+--- a/libdnf/dnf-context.h
++++ b/libdnf/dnf-context.h
+@@ -120,6 +120,8 @@ const gchar     *dnf_context_get_base_arch              (DnfContext     *context
+ const gchar     *dnf_context_get_os_info                (DnfContext     *context);
+ const gchar     *dnf_context_get_arch_info              (DnfContext     *context);
+ const gchar     *dnf_context_get_release_ver            (DnfContext     *context);
++const gchar     *dnf_context_get_release_ver_major      (DnfContext     *context);
++const gchar     *dnf_context_get_release_ver_minor      (DnfContext     *context);
+ const gchar     *dnf_context_get_platform_module        (DnfContext     *context);
+ const gchar     *dnf_context_get_cache_dir              (DnfContext     *context);
+ const gchar     *dnf_context_get_arch                   (DnfContext     *context);
+diff --git a/libdnf/dnf-repo.cpp b/libdnf/dnf-repo.cpp
+index 17aa04be..00555ada 100644
+--- a/libdnf/dnf-repo.cpp
++++ b/libdnf/dnf-repo.cpp
+@@ -1191,8 +1191,8 @@ dnf_repo_setup(DnfRepo *repo, GError **error) try
+     DnfRepoEnabled enabled = DNF_REPO_ENABLED_NONE;
+     g_autofree gchar *basearch = NULL;
+     g_autofree gchar *release = NULL;
+-    g_autofree gchar *major = NULL;
+-    g_autofree gchar *minor = NULL;
++    g_autofree gchar *release_major = NULL;
++    g_autofree gchar *release_minor = NULL;
+ 
+     basearch = g_key_file_get_string(priv->keyfile, "general", "arch", NULL);
+     if (basearch == NULL)
+@@ -1205,8 +1205,14 @@ dnf_repo_setup(DnfRepo *repo, GError **error) try
+         return FALSE;
+     }
+     release = g_key_file_get_string(priv->keyfile, "general", "version", NULL);
+-    if (release == NULL)
++    if (release == NULL) {
+         release = g_strdup(dnf_context_get_release_ver(priv->context));
++        release_major = g_strdup(dnf_context_get_release_ver_major(priv->context));
++        release_minor = g_strdup(dnf_context_get_release_ver_minor(priv->context));
++    } else {
++        dnf_split_releasever(release, &release_major, &release_minor);
++    }
++
+     if (release == NULL) {
+         g_set_error_literal(error,
+                             DNF_ERROR,
+@@ -1220,10 +1226,9 @@ dnf_repo_setup(DnfRepo *repo, GError **error) try
+         return FALSE;
+     if (!lr_handle_setopt(priv->repo_handle, error, LRO_INTERRUPTIBLE, 0L))
+         return FALSE;
+-    dnf_split_releasever(release, &major, &minor);
+     priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever", release);
+-    priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever_major", major);
+-    priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever_minor", minor);
++    priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever_major", release_major);
++    priv->urlvars = lr_urlvars_set(priv->urlvars, "releasever_minor", release_minor);
+     priv->urlvars = lr_urlvars_set(priv->urlvars, "basearch", basearch);
+     /* Call libdnf::dnf_context_load_vars(priv->context); only when values not in cache.
+      * But what about if variables on disk change during long running programs (PackageKit daemon)?
+-- 
+2.49.0
+

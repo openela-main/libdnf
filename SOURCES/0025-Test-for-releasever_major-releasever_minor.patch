@@ -1,0 +1,91 @@
+From 734a573408643c90faf7ff57ea33fec5fb467553 Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Mon, 9 Oct 2023 21:54:08 +0000
+Subject: [PATCH 03/11] Test for $releasever_major, $releasever_minor
+
+---
+ tests/CMakeLists.txt                   |  1 +
+ tests/libdnf/conf/ConfigParserTest.cpp | 33 ++++++++++++++++++++++++++
+ tests/libdnf/conf/ConfigParserTest.hpp | 21 ++++++++++++++++
+ 3 files changed, 55 insertions(+)
+ create mode 100644 tests/libdnf/conf/ConfigParserTest.cpp
+ create mode 100644 tests/libdnf/conf/ConfigParserTest.hpp
+
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 85b47ca1..e4909682 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -1,3 +1,4 @@
++add_subdirectory(libdnf/conf)
+ add_subdirectory(libdnf/module/modulemd)
+ add_subdirectory(libdnf/module)
+ add_subdirectory(libdnf/repo)
+diff --git a/tests/libdnf/conf/ConfigParserTest.cpp b/tests/libdnf/conf/ConfigParserTest.cpp
+new file mode 100644
+index 00000000..70278196
+--- /dev/null
++++ b/tests/libdnf/conf/ConfigParserTest.cpp
+@@ -0,0 +1,33 @@
++#include "ConfigParserTest.hpp"
++
++CPPUNIT_TEST_SUITE_REGISTRATION(ConfigParserTest);
++
++void ConfigParserTest::setUp()
++{}
++
++void ConfigParserTest::testConfigParserReleasever()
++{
++    {
++        // Test $releasever_major, $releasever_minor
++        std::map<std::string, std::string> substitutions = {
++            {"releasever", "1.23"},
++        };
++
++        std::string text = "major: $releasever_major, minor: $releasever_minor";
++        libdnf::ConfigParser::substitute(text, substitutions);
++        CPPUNIT_ASSERT(text == "major: 1, minor: 23");
++
++        text = "full releasever: $releasever";
++        libdnf::ConfigParser::substitute(text, substitutions);
++        CPPUNIT_ASSERT(text == "full releasever: 1.23");
++    }
++    {
++        // Test with empty $releasever, should set empty $releasever_major, $releasever_minor
++        std::map<std::string, std::string> substitutions = {
++            {"releasever", ""},
++        };
++        std::string text = "major: $releasever_major, minor: $releasever_minor";
++        libdnf::ConfigParser::substitute(text, substitutions);
++        CPPUNIT_ASSERT(text == "major: , minor: ");
++    }
++}
+diff --git a/tests/libdnf/conf/ConfigParserTest.hpp b/tests/libdnf/conf/ConfigParserTest.hpp
+new file mode 100644
+index 00000000..7f1faf47
+--- /dev/null
++++ b/tests/libdnf/conf/ConfigParserTest.hpp
+@@ -0,0 +1,21 @@
++#ifndef LIBDNF_CONFIGPARSERTEST_HPP
++#define LIBDNF_CONFIGPARSERTEST_HPP
++
++#include <cppunit/TestCase.h>
++#include <cppunit/extensions/HelperMacros.h>
++
++#include <libdnf/conf/ConfigParser.hpp>
++
++class ConfigParserTest : public CppUnit::TestCase
++{
++    CPPUNIT_TEST_SUITE(ConfigParserTest);
++        CPPUNIT_TEST(testConfigParserReleasever);
++    CPPUNIT_TEST_SUITE_END();
++
++public:
++    void setUp() override;
++    void testConfigParserReleasever();
++
++};
++
++#endif // LIBDNF_CONFIGPARSERTEST_HPP
+-- 
+2.49.0
+
