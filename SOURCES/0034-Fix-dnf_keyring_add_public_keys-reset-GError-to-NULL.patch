@@ -1,0 +1,36 @@
+From 96df64bf5f4e374adac4b1ea423cb29ae73b9f49 Mon Sep 17 00:00:00 2001
+From: Jaroslav Rohel <jrohel@redhat.com>
+Date: Mon, 7 Nov 2022 12:15:19 +0100
+Subject: [PATCH] Fix: "dnf_keyring_add_public_keys": reset GError to NULL
+ (RhBug:2121222)
+
+Fixes problem "PackageKit crashes if parsing multiple key files fails"
+packagekitd[1397]: GError set over the top of a previous GError or
+   uninitialized memory. This indicates a bug in someone's code. You must
+   ensure an error is NULL before it's set. The overwriting error message
+   was: failed to parse public key for
+   /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-14-secondary
+
+= changelog =
+msg: "dnf_keyring_add_public_keys": reset localError to NULL after free
+type: bugfix
+resolves: https://bugzilla.redhat.com/show_bug.cgi?id=2121222
+---
+ libdnf/dnf-keyring.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/libdnf/dnf-keyring.cpp b/libdnf/dnf-keyring.cpp
+index 62a6248c..550d5ce2 100644
+--- a/libdnf/dnf-keyring.cpp
++++ b/libdnf/dnf-keyring.cpp
+@@ -213,6 +213,7 @@ dnf_keyring_add_public_keys(rpmKeyring keyring, GError **error) try
+         if (!ret) {
+             g_warning("%s", localError->message);
+             g_error_free(localError);
++            localError = NULL;
+         }
+     } while (true);
+     return TRUE;
+-- 
+2.52.0
+
