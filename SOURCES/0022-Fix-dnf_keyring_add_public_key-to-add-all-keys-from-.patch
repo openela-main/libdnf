@@ -1,0 +1,221 @@
+From 3892eefb77e95a4dd9113a727503bb4ce29eac2c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Wed, 18 Mar 2026 13:36:18 +0100
+Subject: [PATCH 22/24] Fix dnf_keyring_add_public_key() to add all keys from
+ an ASCII-armored block
+
+Upstream commit: 21e58e48d73a0edba62510bac8d49392c5166ebb
+
+The function was used to import only the first public key OpenPGP
+certificate into an in-memory keyring.  That broke a scenario when
+multiple keys were serialized into a single ASCII-armored OpenPGP
+block in a file.
+
+This patch iterates over all public keys in an ASCII-armored OpenPGP
+block.
+
+If an error is encountered, it continues importing next keys, but at
+the end raises the error. This is to be able to skip unsupported keys
+and to mimic what rpmkeys tool does.
+
+This patch also adds a test into test_libdnf_main test suite. It does
+not add any half-negative test (ie. first packet corrupted, second
+packet valid) as I did not find a way of triggering that behaviour.
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156063
+---
+ .../tests/dnf_keyring_add_public_key/edsa.pub | 13 +++++++
+ .../dnf_keyring_add_public_key/input.edsa.sig |  7 ++++
+ .../dnf_keyring_add_public_key/twopackets.pub | 37 +++++++++++++++++++
+ libdnf/dnf-keyring.cpp                        | 37 ++++++++++++++++++-
+ tests/libdnf/dnf-self-test.c                  | 34 +++++++++++++++++
+ 5 files changed, 127 insertions(+), 1 deletion(-)
+ create mode 100644 data/tests/dnf_keyring_add_public_key/edsa.pub
+ create mode 100644 data/tests/dnf_keyring_add_public_key/input.edsa.sig
+ create mode 100644 data/tests/dnf_keyring_add_public_key/twopackets.pub
+
+diff --git a/data/tests/dnf_keyring_add_public_key/edsa.pub b/data/tests/dnf_keyring_add_public_key/edsa.pub
+new file mode 100644
+index 00000000..37c8e87d
+--- /dev/null
++++ b/data/tests/dnf_keyring_add_public_key/edsa.pub
+@@ -0,0 +1,13 @@
++-----BEGIN PGP PUBLIC KEY BLOCK-----
++
++mDMEZ9rrThYJKwYBBAHaRw8BAQdAgo3RmWKGpGqA5EiHxShDeWtrHZoQsNwbs/vt
++y/TxVi20FnRlc3QyIDx0ZXN0QGxvY2FsaG9zdD6IkwQTFgoAOwIbAwULCQgHAgIi
++AgYVCgkICwIEFgIDAQIeBwIXgBYhBBEeEeFk5htRofYqvklgmdvisUXzBQJpeLaJ
++AAoJEElgmdvisUXzhG8A/1GH9JdZXlxOgCmdpAWWlGTyupjoxd/DSi94XCT1f9wB
++AP4ooHOPquqm27HqMsngcy3iHmRIXfMGMOpc4bqUC7t0Dbg4BGfa604SCisGAQQB
++l1UBBQEBB0BvhdjE5RKOBDP+xi0YXKir7BBFIkF14hDkdpJb5iJkIgMBCAeIeAQY
++FgoAIAIbDBYhBBEeEeFk5htRofYqvklgmdvisUXzBQJpeLcHAAoJEElgmdvisUXz
++JEYBAPPfpwiY0vGV1m+XjXeIgxtN+RZydzi3Dz6dN5hLeOLIAP9NeeDGlB9G2M4W
++QOEU+BFdJuURqeyx1rOk/HLw/QlQAQ==
++=D40+
++-----END PGP PUBLIC KEY BLOCK-----
+diff --git a/data/tests/dnf_keyring_add_public_key/input.edsa.sig b/data/tests/dnf_keyring_add_public_key/input.edsa.sig
+new file mode 100644
+index 00000000..f568bbd7
+--- /dev/null
++++ b/data/tests/dnf_keyring_add_public_key/input.edsa.sig
+@@ -0,0 +1,7 @@
++-----BEGIN PGP SIGNATURE-----
++
++iHUEABYKAB0WIQQRHhHhZOYbUaH2Kr5JYJnb4rFF8wUCabP8yAAKCRBJYJnb4rFF
++81DMAQDF8/qX0jkJyrD/6v6qDJiM8dsb3JBNmZ5C3gDQ3c7uIAEAiiFSl+KbopAa
++bvzjr00099kCEUfkkBlNgdBJ2Cr/oQs=
++=WUbC
++-----END PGP SIGNATURE-----
+diff --git a/data/tests/dnf_keyring_add_public_key/twopackets.pub b/data/tests/dnf_keyring_add_public_key/twopackets.pub
+new file mode 100644
+index 00000000..37dd15b2
+--- /dev/null
++++ b/data/tests/dnf_keyring_add_public_key/twopackets.pub
+@@ -0,0 +1,37 @@
++-----BEGIN PGP PUBLIC KEY BLOCK-----
++
++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
++I/WXJQz8HtwvR2PludKcGBeTAwM=
++=DS1h
++-----END PGP PUBLIC KEY BLOCK-----
+diff --git a/libdnf/dnf-keyring.cpp b/libdnf/dnf-keyring.cpp
+index 07789ed6..6e2ae8a7 100644
+--- a/libdnf/dnf-keyring.cpp
++++ b/libdnf/dnf-keyring.cpp
+@@ -234,6 +234,7 @@ dnf_keyring_add_public_key(rpmKeyring keyring,
+                            GError **error) try
+ {
+     gboolean ret = TRUE;
++    bool importable_certificates_found = FALSE;
+     gsize len;
+     pgpArmor armor;
+     uint8_t *pkt = NULL;
+@@ -273,7 +274,41 @@ dnf_keyring_add_public_key(rpmKeyring keyring,
+         goto out;
+     }
+ 
+-    ret = dnf_keyring_add_public_key_from_memory(keyring, filename, pkt, len, error);
++    {
++        /* Iterate over all public keys in this dearmored block */
++        uint8_t *tpkt = pkt;
++        size_t cert_len;
++        while (len > 0) {
++                if (pgpPubKeyCertLen(tpkt, len, &cert_len))
++                    break;
++                if (cert_len > len)
++                    break;
++
++                if (!dnf_keyring_add_public_key_from_memory(keyring, filename, tpkt, cert_len,
++                            /* Remember first error message */
++                            error == NULL || *error != NULL ? NULL : error))
++                    ret = FALSE;
++
++                tpkt += cert_len;
++                len -= cert_len;
++                importable_certificates_found = TRUE;
++        }
++    }
++
++    if (!ret)
++        /* Prevent overwriting error messages */
++        goto out;
++
++    if (!importable_certificates_found) {
++        ret = FALSE;
++        g_set_error(error,
++                    DNF_ERROR,
++                    DNF_ERROR_GPG_SIGNATURE_INVALID,
++                    "PKI file %s contains no valid public key",
++                    filename);
++        goto out;
++    }
++
+     if (ret) {
+         /* success */
+         g_debug("added missing public key %s to rpmdb", filename);
+diff --git a/tests/libdnf/dnf-self-test.c b/tests/libdnf/dnf-self-test.c
+index b171d948..6eadeb94 100644
+--- a/tests/libdnf/dnf-self-test.c
++++ b/tests/libdnf/dnf-self-test.c
+@@ -233,6 +233,39 @@ dnf_keyring_add_public_key_invalid(void)
+     g_assert_false(verification_passed);
+ }
+ 
++/* Test importing two keys from a file with an ASCII-armored block with two
++ * public key OpenPGP packets. */
++static void
++dnf_keyring_add_public_key_two_packets(void)
++{
++    g_autofree gchar *key_filename = NULL;
++    g_autofree gchar *data_filename = NULL;
++    g_autofree gchar *rsa_signature_filename = NULL;
++    g_autofree gchar *edsa_signature_filename = NULL;
++    gboolean import_passed;
++    g_autoptr(GError) import_error = NULL;
++    gboolean verification_passed;
++
++    key_filename = dnf_test_get_filename("dnf_keyring_add_public_key/twopackets.pub");
++    data_filename = dnf_test_get_filename("dnf_keyring_add_public_key/input");
++    rsa_signature_filename = dnf_test_get_filename("dnf_keyring_add_public_key/input.rsa.sig");
++    edsa_signature_filename = dnf_test_get_filename("dnf_keyring_add_public_key/input.edsa.sig");
++
++    import_and_verify(&import_passed, &import_error, &verification_passed,
++            key_filename, data_filename, rsa_signature_filename);
++    g_assert_true(import_passed);
++    g_assert_no_error(import_error);
++    g_clear_error(&import_error);
++    g_assert_true(verification_passed);
++
++    import_and_verify(&import_passed, &import_error, &verification_passed,
++            key_filename, data_filename, edsa_signature_filename);
++    g_assert_true(import_passed);
++    g_assert_no_error(import_error);
++    g_clear_error(&import_error);
++    g_assert_true(verification_passed);
++}
++
+ static void
+ dnf_lock_func(void)
+ {
+@@ -1452,6 +1485,7 @@ main(int argc, char **argv)
+     g_test_add_func("/libdnf/context{cache-clean-check}", dnf_context_cache_clean_check_func);
+     g_test_add_func("/libdnf/dnf_keyring_add_public_key[valid]", dnf_keyring_add_public_key_valid);
+     g_test_add_func("/libdnf/dnf_keyring_add_public_key[invalid]", dnf_keyring_add_public_key_invalid);
++    g_test_add_func("/libdnf/dnf_keyring_add_public_key[two-packets]", dnf_keyring_add_public_key_two_packets);
+     g_test_add_func("/libdnf/lock", dnf_lock_func);
+     g_test_add_func("/libdnf/lock[threads]", dnf_lock_threads_func);
+     g_test_add_func("/libdnf/split_releasever", dnf_split_releasever_func);
+-- 
+2.53.0
+

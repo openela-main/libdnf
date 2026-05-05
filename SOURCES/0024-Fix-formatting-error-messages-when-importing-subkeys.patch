@@ -1,0 +1,66 @@
+From aa80ec474cd76f9a895c84d6d2c0429b89b65a8f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Thu, 9 Apr 2026 16:26:20 +0200
+Subject: [PATCH 24/24] Fix formatting error messages when importing subkeys
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream commit: 5207a34fb9b5f9f4853dd5f3c1f03e2881cfb5da
+
+Compilation on RHEL 10, where RPM is older than version 6, warns:
+
+    /home/test/rhel/libdnf/libdnf-0.73.1/libdnf/dnf-keyring.cpp: In function ‘gboolean dnf_keyring_add_publ
+    ic_key_from_memory(rpmKeyring, const gchar*, const uint8_t*, size_t, GError**)’:
+    /home/test/rhel/libdnf/libdnf-0.73.1/libdnf/dnf-keyring.cpp:176:33: warning: too many arguments for for
+    mat [-Wformat-extra-args]
+      176 |                                 "failed to add 0x%s subkey from %s to rpmdb",
+	  |                                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    /home/test/rhel/libdnf/libdnf-0.73.1/libdnf/dnf-keyring.cpp:185:33: warning: too many arguments for for
+    mat [-Wformat-extra-args]
+      185 |                                 "failed to add a subkey for 0x%s primary key from %s to rpmdb",
+	  |                                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is a real bug introduced in commit
+e0c56202ebde444bb73065843ac3dc2f7e4a8f3a ("Log identifiers of keys
+imported by dnf_keyring_add_public_key()").
+
+This patch fixes the format string arguments.
+
+It also fixes a typo in a variable name of branching condition.
+---
+ libdnf/dnf-keyring.cpp | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/libdnf/dnf-keyring.cpp b/libdnf/dnf-keyring.cpp
+index 6ada3560..731c663d 100644
+--- a/libdnf/dnf-keyring.cpp
++++ b/libdnf/dnf-keyring.cpp
+@@ -163,7 +163,7 @@ dnf_keyring_add_public_key_from_memory(rpmKeyring keyring,
+             char *subkeyid = formatkeyid(subkey);
+             ret = FALSE;
+             if (keyid == NULL)
+-                if (subkey == NULL)
++                if (subkeyid == NULL)
+                     g_set_error(error,
+                                 DNF_ERROR,
+                                 DNF_ERROR_GPG_SIGNATURE_INVALID,
+@@ -175,7 +175,6 @@ dnf_keyring_add_public_key_from_memory(rpmKeyring keyring,
+                                 DNF_ERROR_GPG_SIGNATURE_INVALID,
+                                 "failed to add 0x%s subkey from %s to rpmdb",
+                                 subkeyid,
+-                                keyid,
+                                 filename);
+             else
+                 if (subkeyid == NULL)
+@@ -183,7 +182,6 @@ dnf_keyring_add_public_key_from_memory(rpmKeyring keyring,
+                                 DNF_ERROR,
+                                 DNF_ERROR_GPG_SIGNATURE_INVALID,
+                                 "failed to add a subkey for 0x%s primary key from %s to rpmdb",
+-                                subkeyid,
+                                 keyid,
+                                 filename);
+                 else
+-- 
+2.53.0
+

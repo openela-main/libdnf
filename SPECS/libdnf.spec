@@ -56,7 +56,7 @@
 
 Name:           libdnf
 Version:        %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:        12%{?dist}
+Release:        12%{?dist}.1
 Summary:        Library providing simplified C and Python API to libsolv
 License:        LGPL-2.1-or-later
 URL:            https://github.com/rpm-software-management/libdnf
@@ -79,6 +79,12 @@ Patch15:        0015-module-Warn-if-module-config-file-is-inaccessible.patch
 Patch16:        0016-history-DB-Add-persistence-column.patch
 Patch17:        0017-MergedTransaction-listPersistences.patch
 Patch18:        0018-conf-Add-usr_drift_protected_paths.patch
+Patch19:        0019-tests-Add-tests-for-dnf_keyring_add_public_key.patch
+Patch20:        0020-Move-importing-a-key-from-a-memory-block-into-a-sepa.patch
+Patch21:        0021-Log-identifiers-of-keys-imported-by-dnf_keyring_add_.patch
+Patch22:        0022-Fix-dnf_keyring_add_public_key-to-add-all-keys-from-.patch
+Patch23:        0023-Fix-dnf_keyring_add_public_key-to-add-keys-from-all-.patch
+Patch24:        0024-Fix-formatting-error-messages-when-importing-subkeys.patch
 
 BuildRequires:  cmake
 BuildRequires:  gcc
@@ -322,6 +328,10 @@ popd
 %endif
 
 %changelog
+* Mon Apr 13 2026 Petr Pisar <ppisar@redhat.com> - 0.73.1-12.1
+- Fix dnf_keyring_add_public_key() to add multiple keys from a single file
+  (RHEL-156041)
+
 * Thu Jun 26 2025 Evan Goode <egoode@redhat.com> - 0.73.1-12
 - Bump version due to failed build
 
