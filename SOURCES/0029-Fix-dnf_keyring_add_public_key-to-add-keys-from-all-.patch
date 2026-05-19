@@ -1,7 +1,7 @@
-From 6e64245b6092d412b59a5571ce6fda588b132ebb Mon Sep 17 00:00:00 2001
+From 3b3c8910837d51431e9cc79e131671f48ea5f04b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
 Date: Wed, 18 Mar 2026 15:46:30 +0100
-Subject: [PATCH 23/24] Fix dnf_keyring_add_public_key() to add keys from all
+Subject: [PATCH 29/30] Fix dnf_keyring_add_public_key() to add keys from all
  ASCII-armored blocks
 
 Upstream commit: af94b4cc5b7f96829ab8cb9d7dc3fbc92fa56d92

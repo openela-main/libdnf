@@ -1,7 +1,7 @@
-From b078d8bb7d8c76f839a3be1d5fdbcb7ab76de8ea Mon Sep 17 00:00:00 2001
+From 435b2a678af4f428d66044f7c5035c640abbc780 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
 Date: Wed, 18 Mar 2026 13:36:18 +0100
-Subject: [PATCH 21/24] Log identifiers of keys imported by
+Subject: [PATCH 27/30] Log identifiers of keys imported by
  dnf_keyring_add_public_key()
 
 Upstream commit: e0c56202ebde444bb73065843ac3dc2f7e4a8f3a

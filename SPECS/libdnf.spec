@@ -56,7 +56,7 @@
 
 Name:           libdnf
 Version:        %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:        12%{?dist}.1
+Release:        15%{?dist}
 Summary:        Library providing simplified C and Python API to libsolv
 License:        LGPL-2.1-or-later
 URL:            https://github.com/rpm-software-management/libdnf
@@ -79,12 +79,18 @@ Patch15:        0015-module-Warn-if-module-config-file-is-inaccessible.patch
 Patch16:        0016-history-DB-Add-persistence-column.patch
 Patch17:        0017-MergedTransaction-listPersistences.patch
 Patch18:        0018-conf-Add-usr_drift_protected_paths.patch
-Patch19:        0019-tests-Add-tests-for-dnf_keyring_add_public_key.patch
-Patch20:        0020-Move-importing-a-key-from-a-memory-block-into-a-sepa.patch
-Patch21:        0021-Log-identifiers-of-keys-imported-by-dnf_keyring_add_.patch
-Patch22:        0022-Fix-dnf_keyring_add_public_key-to-add-all-keys-from-.patch
-Patch23:        0023-Fix-dnf_keyring_add_public_key-to-add-keys-from-all-.patch
-Patch24:        0024-Fix-formatting-error-messages-when-importing-subkeys.patch
+Patch19:        0019-fix-compare-RPMItem-in-transaction-with-rpmvercmp.patch
+Patch20:        0020-Mark-all-protected-packages-as-user-installed-for-al.patch
+Patch21:        0021-Add-filterUnneededExtraUserinstalled-and-Python-vers.patch
+Patch22:        0022-Describe-all-problems-even-when-there-are-protected-.patch
+Patch23:        0023-Clearer-error-for-protected-package-broken-dependenc.patch
+Patch24:        0024-Goal-set-protected-as-userinstalled-only-for-the-tem.patch
+Patch25:        0025-tests-Add-tests-for-dnf_keyring_add_public_key.patch
+Patch26:        0026-Move-importing-a-key-from-a-memory-block-into-a-sepa.patch
+Patch27:        0027-Log-identifiers-of-keys-imported-by-dnf_keyring_add_.patch
+Patch28:        0028-Fix-dnf_keyring_add_public_key-to-add-all-keys-from-.patch
+Patch29:        0029-Fix-dnf_keyring_add_public_key-to-add-keys-from-all-.patch
+Patch30:        0030-Fix-formatting-error-messages-when-importing-subkeys.patch
 
 BuildRequires:  cmake
 BuildRequires:  gcc
@@ -328,9 +334,18 @@ popd
 %endif
 
 %changelog
-* Mon Apr 13 2026 Petr Pisar <ppisar@redhat.com> - 0.73.1-12.1
+* Mon Apr 13 2026 Petr Pisar <ppisar@redhat.com> - 0.73.1-15
 - Fix dnf_keyring_add_public_key() to add multiple keys from a single file
-  (RHEL-156041)
+  (RHEL-156063)
+
+* Mon Feb 09 2026 Ales Matej <amatej@redhat.com> - 0.73.1-14
+- Mark all protected packages as user installed for all transactions (RHEL-128445)
+- Add `filterUnneededExtraUserinstalled` and Python version to the API
+- Describe all problems even when there are protected removals (RHEL-146507)
+- Clearer error for protected package broken dependencies
+
+* Tue Feb 03 2026 Matej Focko <mfocko@redhat.com> - 0.73.1-13
+- Fix comparison of RPM items in the transaction (RHEL-128443)
 
 * Thu Jun 26 2025 Evan Goode <egoode@redhat.com> - 0.73.1-12
 - Bump version due to failed build

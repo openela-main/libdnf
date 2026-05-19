@@ -1,0 +1,57 @@
+From 83d3c39df84e96860efd35c2e18903dd16d050c7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Tue, 10 Feb 2026 13:04:42 +0100
+Subject: [PATCH] Goal: set protected as userinstalled only for the temporary
+ job
+
+This way the goal's `staging` is not affected.
+---
+ libdnf/goal/Goal.cpp | 25 ++++++++++++++++---------
+ 1 file changed, 16 insertions(+), 9 deletions(-)
+
+diff --git a/libdnf/goal/Goal.cpp b/libdnf/goal/Goal.cpp
+index 4544cd9e..c624fb41 100644
+--- a/libdnf/goal/Goal.cpp
++++ b/libdnf/goal/Goal.cpp
+@@ -987,15 +987,6 @@ Goal::jobLength()
+ bool
+ Goal::run(DnfGoalActions flags)
+ {
+-    // Automatically mark all protected packages as user installed.
+-    // When a protected package is installed as a dependency it can block
+-    // removal of the last package that depends on it (because the protected
+-    // package cannot be removed, not even as an unused dependency).
+-    // To prevent this and still correctly resolve dependencies of the protected
+-    // packages mark them all as user installed.
+-    if (pImpl->protectedPkgs) {
+-        userInstalled(*pImpl->protectedPkgs);
+-    }
+     auto job = pImpl->constructJob(flags);
+     pImpl->actions = static_cast<DnfGoalActions>(pImpl->actions | flags);
+     int ret = pImpl->solve(job->getQueue(), flags);
+@@ -1444,6 +1435,22 @@ Goal::Impl::constructJob(DnfGoalActions flags)
+ 
+     allowUninstallAllButProtected(job->getQueue(), flags);
+ 
++    // Automatically mark all protected packages as user installed.
++    // When a protected package is installed as a dependency it can block
++    // removal of the last package that depends on it (because the protected
++    // package cannot be removed, not even as an unused dependency).
++    // To prevent this and still correctly resolve dependencies of the protected
++    // packages mark them all as user installed.
++    if (protectedPkgs) {
++        Id id = -1;
++        while (true) {
++            id = protectedPkgs->next(id);
++            if (id == -1)
++                break;
++            queue_push2(job->getQueue(), SOLVER_SOLVABLE|SOLVER_USERINSTALLED, id);
++        }
++    }
++
+     if (flags & DNF_VERIFY)
+         job->pushBack(SOLVER_VERIFY|SOLVER_SOLVABLE_ALL, 0);
+ 
+-- 
+2.53.0
+

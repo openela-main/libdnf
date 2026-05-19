@@ -1,7 +1,7 @@
-From d7ce52b5793e8c0be03bbdfac416e7c76bfbb03a Mon Sep 17 00:00:00 2001
+From 72252383942769f8ad7858e3d5abe2cb64488371 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
 Date: Fri, 13 Mar 2026 17:40:15 +0100
-Subject: [PATCH 19/24] tests: Add tests for dnf_keyring_add_public_key()
+Subject: [PATCH 25/30] tests: Add tests for dnf_keyring_add_public_key()
 
 Upstream commit: dc3f0098e30a9154f530ea4fc31c500927a7ad01
 

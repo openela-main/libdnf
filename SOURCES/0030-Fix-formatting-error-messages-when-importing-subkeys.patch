@@ -1,7 +1,7 @@
-From aa80ec474cd76f9a895c84d6d2c0429b89b65a8f Mon Sep 17 00:00:00 2001
+From 60ab51a163451fe6da0173ae7a3a05d8689ff7ef Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
 Date: Thu, 9 Apr 2026 16:26:20 +0200
-Subject: [PATCH 24/24] Fix formatting error messages when importing subkeys
+Subject: [PATCH 30/30] Fix formatting error messages when importing subkeys
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

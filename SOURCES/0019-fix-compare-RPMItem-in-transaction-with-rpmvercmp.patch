@@ -1,0 +1,206 @@
+From 433af8870a741f04d2e55616e83d251a972eac32 Mon Sep 17 00:00:00 2001
+From: Matej Focko <mfocko@redhat.com>
+Date: Fri, 30 Jan 2026 12:28:09 +0100
+Subject: [PATCH] fix: compare RPMItem in transaction with rpmvercmp
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Previous implementation resorts to manual comparison of the EVR fields
+including the following issues:
+
+• There appears to be a typo when comparing epochs:
+
+      } else if (epoch < 0) {
+
+  instead of
+
+      } else if (epochDif < 0) {
+
+  N.B. ‹epoch < 0› is unreachable
+  • RPM packaging guidelines **do not** define any requirements on the
+  value (and is internally represented as ‹int32_t›)
+  • On the contrary Fedora packaging guidelines denote:
+
+      If present, it MUST consist of a positive integer.
+
+• There is a manual parsing of the version fields by “chopping off” the
+  parts ofversion and parsing them via ‹std::stoi›.
+
+• More importantly, reported by bugs below, the release fields are
+  ignored altogether.
+
+Instead of manually processing the EVR, with a potential room to error,
+switch to using the ‹::rpmvercmp› from ‹rpm/rpmver.h› that should be the
+“source of truth” in this case.
+
+Also cover the discovered problems with regression tests in unit tests.
+
+Fixes RHEL-81778
+Fixes RHEL-81779
+Fixes RHEL-128443 (RHEL10 clone of RHEL-81779)
+
+Signed-off-by: Matej Focko <mfocko@redhat.com>
+(cherry picked from commit 1bcd660168302c120b73b99238babf39f3131faa)
+---
+ libdnf/transaction/RPMItem.cpp           | 39 +++++++--------
+ tests/libdnf/transaction/RpmItemTest.cpp | 61 ++++++++++++++++++++++++
+ tests/libdnf/transaction/RpmItemTest.hpp |  2 +
+ 3 files changed, 80 insertions(+), 22 deletions(-)
+
+diff --git a/libdnf/transaction/RPMItem.cpp b/libdnf/transaction/RPMItem.cpp
+index ecce789d..92c26d09 100644
+--- a/libdnf/transaction/RPMItem.cpp
++++ b/libdnf/transaction/RPMItem.cpp
+@@ -20,6 +20,7 @@
+ 
+ #include <algorithm>
+ #include <map>
++#include <rpm/rpmver.h>
+ #include <sstream>
+ 
+ #include "../hy-subject.h"
+@@ -343,35 +344,29 @@ RPMItem::resolveTransactionItemReason(SQLite3Ptr conn,
+  * Compare RPM packages
+  * This method doesn't care about compare package names
+  * \param other RPMItem to compare with
+- * \return true if other package is newer (has higher version and/or epoch)
++ * \return true if other package is newer (has higher epoch, version, or release)
+  */
+ bool
+ RPMItem::operator<(const RPMItem &other) const
+ {
+-    // compare epochs
+-    int32_t epochDif = other.getEpoch() - getEpoch();
+-    if (epochDif > 0) {
+-        return true;
+-    } else if (epoch < 0) {
+-        return false;
++    // Compare epochs
++    if (getEpoch() != other.getEpoch()) {
++        return getEpoch() < other.getEpoch();
+     }
+ 
+-    // compare versions
+-    std::stringstream versionThis(getVersion());
+-    std::stringstream versionOther(other.getVersion());
+-
+-    std::string bufferThis;
+-    std::string bufferOther;
+-    while (std::getline(versionThis, bufferThis, '.') &&
+-           std::getline(versionOther, bufferOther, '.')) {
+-        int subVersionThis = std::stoi(bufferThis);
+-        int subVersionOther = std::stoi(bufferOther);
+-        if (subVersionThis == subVersionOther) {
+-            continue;
+-        }
+-        return subVersionOther > subVersionThis;
++    // Compare versions
++    auto version = getVersion();
++    auto otherVersion = other.getVersion();
++    auto cmpResult = ::rpmvercmp(version.c_str(), otherVersion.c_str());
++    if (cmpResult != 0) {
++        return cmpResult < 0;
+     }
+-    return false;
++
++    // Compare releases
++    auto release = getRelease();
++    auto otherRelease = other.getRelease();
++    cmpResult = ::rpmvercmp(release.c_str(), otherRelease.c_str());
++    return cmpResult < 0;
+ }
+ 
+ std::vector< int64_t >
+diff --git a/tests/libdnf/transaction/RpmItemTest.cpp b/tests/libdnf/transaction/RpmItemTest.cpp
+index 774c716a..503e4ec3 100644
+--- a/tests/libdnf/transaction/RpmItemTest.cpp
++++ b/tests/libdnf/transaction/RpmItemTest.cpp
+@@ -119,3 +119,64 @@ RpmItemTest::testGetTransactionItems()
+     //CPPUNIT_ASSERT(createMs.count() == 0);
+     //CPPUNIT_ASSERT(readMs.count() == 0);
+ }
++
++/**
++ * Regression test for RHEL-81778
++ * Regression test for RHEL-81779
++ */
++void
++RpmItemTest::testComparison()
++{
++    auto a = std::make_shared< RPMItem >(conn);
++    a->setName("rsyslog");
++    a->setEpoch(0);
++    a->setVersion("8.2102.0");
++    a->setRelease("1.el9");
++    a->setArch("aarch64");
++
++    auto b = std::make_shared< RPMItem >(conn);
++    b->setName("rsyslog");
++    b->setEpoch(0);
++    b->setVersion("8.2102.0");
++    b->setRelease("5.el9");
++    b->setArch("aarch64");
++
++    // rsyslog-8.2102.0-1.el9.aarch64 < rsyslog-8.2102.0-5.el9.aarch64
++    CPPUNIT_ASSERT(*a < *b);
++    CPPUNIT_ASSERT(!(*b < *a));
++
++    a->setRelease("2.el9");
++    b->setRelease("1.el9");
++
++    // rsyslog-8.2102.0-1.el9.aarch64 < rsyslog-8.2102.0-2.el9.aarch64
++    CPPUNIT_ASSERT(*b < *a);
++    CPPUNIT_ASSERT(!(*a < *b));
++
++    b->setRelease("10.el9");
++
++    // rsyslog-8.2102.0-2.el9.aarch64 < rsyslog-8.2102.0-10.el9.aarch64
++    CPPUNIT_ASSERT(*a < *b);
++    CPPUNIT_ASSERT(!(*b < *a));
++
++    // Cover fixed comparison of epochs (previously falling through to version
++    // comparison when left side being newer)
++    {
++        auto a = std::make_shared< RPMItem >(conn);
++        a->setName("rsyslog");
++        a->setEpoch(0);
++        a->setVersion("8.2102.0");
++        a->setRelease("1.el9");
++        a->setArch("aarch64");
++
++        auto b = std::make_shared< RPMItem >(conn);
++        b->setName("rsyslog");
++        b->setEpoch(3);
++        b->setVersion("8.2101.0");
++        b->setRelease("1.el9");
++        b->setArch("aarch64");
++
++        // rsyslog-0:8.2102.0-1.el9.aarch64 < rsyslog-3:8.2101.0-1.el9.aarch64
++        CPPUNIT_ASSERT(*a < *b);
++        CPPUNIT_ASSERT(!(*b < *a));
++    }
++}
+diff --git a/tests/libdnf/transaction/RpmItemTest.hpp b/tests/libdnf/transaction/RpmItemTest.hpp
+index 59cc6c59..bb4cd930 100644
+--- a/tests/libdnf/transaction/RpmItemTest.hpp
++++ b/tests/libdnf/transaction/RpmItemTest.hpp
+@@ -10,6 +10,7 @@ class RpmItemTest : public CppUnit::TestCase {
+     CPPUNIT_TEST(testCreate);
+     CPPUNIT_TEST(testCreateDuplicates);
+     CPPUNIT_TEST(testGetTransactionItems);
++    CPPUNIT_TEST(testComparison);
+     CPPUNIT_TEST_SUITE_END();
+ 
+ public:
+@@ -19,6 +20,7 @@ public:
+     void testCreate();
+     void testCreateDuplicates();
+     void testGetTransactionItems();
++    void testComparison();
+ 
+ private:
+     std::shared_ptr< SQLite3 > conn;
+-- 
+2.52.0
+

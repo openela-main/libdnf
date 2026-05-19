@@ -1,0 +1,31 @@
+From 3da41b9d881fc5f0bb8c09b4d1ae4dde9626dd1e Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Tue, 27 Jan 2026 13:00:50 -0500
+Subject: [PATCH 4/5] Describe all problems even when there are protected
+ removals
+
+Previously, if a transaction involved removal (or dependency break) of a
+protected package, only the protected package problem would be described
+by `describeProblemRules`. Information about excluded or versionlocked
+packages would be missing.
+
+For: RHEL-146507
+---
+ libdnf/goal/Goal.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/libdnf/goal/Goal.cpp b/libdnf/goal/Goal.cpp
+index f2b20ced..47d9888e 100644
+--- a/libdnf/goal/Goal.cpp
++++ b/libdnf/goal/Goal.cpp
+@@ -1108,7 +1108,6 @@ Goal::describeProblemRules(unsigned i, bool pkgs)
+     auto problem = pImpl->describeProtectedRemoval();
+     if (!problem.empty()) {
+         output.push_back(std::move(problem));
+-        return output;
+     }
+     auto solv = pImpl->solv;
+ 
+-- 
+2.53.0
+
