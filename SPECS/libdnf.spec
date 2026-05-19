@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              17%{?dist}
+Release:              18%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -96,8 +96,14 @@ Patch30:              0030-C-API-Detect-releasever_major-releasever_minor-from-.
 Patch31:              0031-C-API-Use-releasever_-major-minor-from-context-inste.patch
 Patch32:              0032-C-API-support-shell-style-variable-substitution.patch
 Patch33:              0033-C-API-test-shell-style-variable-expressions.patch
-Patch34:              0034-Fix-dnf_keyring_add_public_keys-reset-GError-to-NULL.patch
-Patch35:              9999-change-bugtracker.diff
+Patch34:              0034-fix-compare-RPMItem-in-transaction-with-rpmvercmp.patch
+Patch35:              0035-Fix-dnf_keyring_add_public_keys-reset-GError-to-NULL.patch
+Patch36:              0036-Mark-all-protected-packages-as-user-installed-for-al.patch
+Patch37:              0037-Add-filterUnneededExtraUserinstalled-and-Python-vers.patch
+Patch38:              0038-Describe-all-problems-even-when-there-are-protected-.patch
+Patch39:              0039-Clearer-error-for-protected-package-broken-dependenc.patch
+Patch40:              0040-Goal-set-protected-as-userinstalled-only-for-the-tem.patch
+Patch41:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -347,11 +353,18 @@ popd
 %endif
 
 %changelog
-* Tue Feb 17 2026 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue May 19 2026 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
 
-* Tue Feb 03 2026 Ales Matej <amatej@redhat.com> - 0.69.0-17
-- Fix a crash when parsing multiple key files fails (RHEL-135601)
+* Mon Feb 09 2026 Ales Matej <amatej@redhat.com> - 0.69.0-18
+- Fix a crash when parsing multiple key files fails (RHEL-145618)
+- Mark all protected packages as user installed for all transactions (RHEL-76112)
+- Add `filterUnneededExtraUserinstalled` and Python version to the API
+- Describe all problems even when there are protected removals (RHEL-115194)
+- Clearer error for protected package broken dependencies
+
+* Tue Feb 03 2026 Matej Focko <mfocko@redhat.com> - 0.69.0-17
+- Fix comparison of RPM items in the transaction (RHEL-81779)
 
 * Mon Jun 30 2025 Evan Goode <egoode@redhat.com> - 0.69.0-16
 - Introduce $releasever_major, $releasever_minor variables, shell-style

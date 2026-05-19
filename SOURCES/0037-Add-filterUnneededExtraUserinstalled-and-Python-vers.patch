@@ -1,0 +1,149 @@
+From 71c3d69bf56c1fa0726b7b5a2fad20acbf8f1ba9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ale=C5=A1=20Mat=C4=9Bj?= <amatej@redhat.com>
+Date: Mon, 26 Jan 2026 14:07:37 +0100
+Subject: [PATCH 2/5] Add `filterUnneededExtraUserinstalled` and Python version
+ to the API
+
+This can be used to get unneeded packages with for example protected
+packages extra marked as userinstalled.
+---
+ libdnf/sack/query.cpp      | 18 +++++++++++----
+ libdnf/sack/query.hpp      |  1 +
+ python/hawkey/query-py.cpp | 47 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 62 insertions(+), 4 deletions(-)
+
+diff --git a/libdnf/sack/query.cpp b/libdnf/sack/query.cpp
+index 6eecfa50..8dce7082 100644
+--- a/libdnf/sack/query.cpp
++++ b/libdnf/sack/query.cpp
+@@ -830,7 +830,7 @@ private:
+     void filterUpdownByPriority(const Filter & f, Map *m);
+     void filterUpdownAble(const Filter  &f, Map *m);
+     void filterDataiterator(const Filter & f, Map *m);
+-    int filterUnneededOrSafeToRemove(const Swdb &swdb, bool debug_solver, bool safeToRemove);
++    int filterUnneededOrSafeToRemove(const Swdb &swdb, bool debug_solver, bool safeToRemove, PackageSet *extra_userinstalled);
+     void obsoletesByPriority(Pool * pool, Solvable * candidate, Map * m, const Map * target, int obsprovides);
+ 
+     bool isGlob(const std::vector<const char *> &matches) const;
+@@ -2245,7 +2245,7 @@ Query::Impl::filterDataiterator(const Filter & f, Map *m)
+ }
+ 
+ int
+-Query::Impl::filterUnneededOrSafeToRemove(const Swdb &swdb, bool debug_solver, bool safeToRemove)
++Query::Impl::filterUnneededOrSafeToRemove(const Swdb &swdb, bool debug_solver, bool safeToRemove, PackageSet *extra_userinstalled)
+ {
+     apply();
+     Goal goal(sack);
+@@ -2260,6 +2260,10 @@ Query::Impl::filterUnneededOrSafeToRemove(const Swdb &swdb, bool debug_solver, b
+     }
+     goal.userInstalled(*userInstalled);
+ 
++    if (extra_userinstalled != NULL) {
++        goal.userInstalled(*extra_userinstalled);
++    }
++
+     int ret1 = goal.run(DNF_NONE);
+     if (ret1)
+         return -1;
+@@ -2575,13 +2579,19 @@ Query::filterDuplicated()
+ int
+ Query::filterUnneeded(const Swdb &swdb, bool debug_solver)
+ {
+-    return pImpl->filterUnneededOrSafeToRemove(swdb, debug_solver, false);
++    return pImpl->filterUnneededOrSafeToRemove(swdb, debug_solver, false, NULL);
+ }
+ 
+ int
+ Query::filterSafeToRemove(const Swdb &swdb, bool debug_solver)
+ {
+-    return pImpl->filterUnneededOrSafeToRemove(swdb, debug_solver, true);
++    return pImpl->filterUnneededOrSafeToRemove(swdb, debug_solver, true, NULL);
++}
++
++int
++Query::filterUnneededExtraUserinstalled(const Swdb &swdb, PackageSet &extra_userinstalled, bool debug_solver)
++{
++    return pImpl->filterUnneededOrSafeToRemove(swdb, debug_solver, false, &extra_userinstalled);
+ }
+ 
+ void
+diff --git a/libdnf/sack/query.hpp b/libdnf/sack/query.hpp
+index 306b24e3..a5ed7745 100644
+--- a/libdnf/sack/query.hpp
++++ b/libdnf/sack/query.hpp
+@@ -177,6 +177,7 @@ public:
+     void filterRecent(const long unsigned int recent_limit);
+     void filterDuplicated();
+     int filterUnneeded(const Swdb &swdb, bool debug_solver);
++    int filterUnneededExtraUserinstalled(const Swdb &swdb, PackageSet &extra_userinstalled, bool debug_solver);
+     int filterSafeToRemove(const Swdb &swdb, bool debug_solver);
+     void getAdvisoryPkgs(int cmpType,  std::vector<AdvisoryPkg> & advisoryPkgs);
+     void filterUserInstalled(const Swdb &swdb);
+diff --git a/python/hawkey/query-py.cpp b/python/hawkey/query-py.cpp
+index 99f71bd5..1290a07a 100644
+--- a/python/hawkey/query-py.cpp
++++ b/python/hawkey/query-py.cpp
+@@ -809,6 +809,52 @@ filter_unneeded(PyObject *self, PyObject *args, PyObject *kwds) try
+     return filter_unneeded_or_safe_to_remove(self, args, kwds, false);
+ } CATCH_TO_PYTHON
+ 
++static PyObject *
++filter_unneeded_extra_userinstalled(PyObject *self, PyObject *args, PyObject *kwds) try
++{
++    const char *kwlist[] = {"swdb", "extra_userinstalled", "debug_solver", NULL};
++    PyObject *pySwdb;
++    PyObject *extra_userinstalled;
++    PyObject *debug_solver = NULL;
++
++    if (!PyArg_ParseTupleAndKeywords(
++            args, kwds, "OO|O!", (char **)kwlist, &pySwdb, &extra_userinstalled, &PyBool_Type, &debug_solver)) {
++        return NULL;
++    }
++
++    UniquePtrPyObject thisPySwdb(PyObject_GetAttrString(pySwdb, "this"));
++    auto swigSwdb = reinterpret_cast< SwdbSwigPyObject * >(thisPySwdb.get());
++    if (swigSwdb == nullptr) {
++        PyErr_SetString(PyExc_SystemError, "Unable to parse SwigPyObject");
++        return NULL;
++    }
++    libdnf::Swdb *swdb = swigSwdb->ptr;
++    if (swdb == NULL) {
++        PyErr_SetString(PyExc_SystemError, "Unable to parse swig object");
++        return NULL;
++    }
++
++    HyQuery query = ((_QueryObject *) self)->query;
++    auto extra_userinstalled_pset = pyseq_to_packageset(extra_userinstalled, query->getSack());
++    if (!extra_userinstalled_pset) {
++        PyErr_SetString(PyExc_SystemError, "Unable to parse SwigPyObject: extra_userinstalled PackageSet");
++        return NULL;
++    }
++
++    std::unique_ptr<libdnf::Query> self_query_copy(new libdnf::Query(*query));
++    gboolean c_debug_solver = debug_solver != NULL && PyObject_IsTrue(debug_solver);
++
++    int ret = self_query_copy->filterUnneededExtraUserinstalled(*swdb, *extra_userinstalled_pset, c_debug_solver);
++    if (ret == -1) {
++        PyErr_SetString(PyExc_SystemError, "Unable to provide query with unneded filter");
++        return NULL;
++    }
++
++    PyObject *final_query = queryToPyObject(self_query_copy.release(), ((_QueryObject *) self)->sack,
++                                            Py_TYPE(self));
++    return final_query;
++} CATCH_TO_PYTHON
++
+ static PyObject *
+ q_add(_QueryObject *self, PyObject *list) try
+ {
+@@ -1071,6 +1117,7 @@ static struct PyMethodDef query_methods[] = {
+     {"_nevra", (PyCFunction)add_nevra_or_other_filter, METH_VARARGS, NULL},
+     {"_recent", (PyCFunction)add_filter_recent, METH_VARARGS, NULL},
+     {"_unneeded", (PyCFunction)filter_unneeded, METH_KEYWORDS|METH_VARARGS, NULL},
++    {"_unneeded_extra_userinstalled", (PyCFunction)filter_unneeded_extra_userinstalled, METH_KEYWORDS|METH_VARARGS, NULL},
+     {"_safe_to_remove", (PyCFunction)filter_safe_to_remove, METH_KEYWORDS|METH_VARARGS, NULL},
+     {NULL}                      /* sentinel */
+ };
+-- 
+2.53.0
+
