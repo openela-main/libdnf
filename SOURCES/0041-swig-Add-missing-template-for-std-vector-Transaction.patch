@@ -1,0 +1,35 @@
+From e5a7516c4c865f2b8e186e957d03abf965057382 Mon Sep 17 00:00:00 2001
+From: Evan Goode <mail@evangoo.de>
+Date: Mon, 9 Mar 2026 22:23:45 -0400
+Subject: [PATCH] swig: Add missing %template for
+ std::vector<TransactionPersistence>
+
+MergedTransaction::listPersistences() returns std::vector<TransactionPersistence>,
+but no SWIG %template was declared for this type. Without it, SWIG wraps the
+return value as an opaque pointer instead of a Python list, causing memory leak
+warnings and preventing Python code from iterating over the values.
+
+Add the missing template, matching the existing TransactionStateVector pattern.
+
+For: https://github.com/rpm-software-management/libdnf/issues/1744
+
+Assisted-by: Claude Opus 4.6
+---
+ bindings/swig/transaction.i | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/bindings/swig/transaction.i b/bindings/swig/transaction.i
+index c5fe04d8e..e1299b05f 100644
+--- a/bindings/swig/transaction.i
++++ b/bindings/swig/transaction.i
+@@ -80,6 +80,7 @@ typedef libdnf::CompsPackageType CompsPackageType;
+ %template() std::vector<std::shared_ptr<libdnf::CompsGroupPackage> >;
+ %template() std::vector<std::shared_ptr<libdnf::CompsEnvironmentGroup> >;
+ %template(TransactionStateVector) std::vector<libdnf::TransactionState>;
++%template(TransactionPersistenceVector) std::vector<libdnf::TransactionPersistence>;
+ 
+ %template() std::vector<uint32_t>;
+ %template() std::vector<int64_t>;
+-- 
+2.54.0
+

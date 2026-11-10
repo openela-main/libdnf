@@ -58,7 +58,7 @@
 
 Name:                 libdnf
 Version:              %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:              18%{?dist}
+Release:              20%{?dist}
 Summary:              Library providing simplified C and Python API to libsolv
 License:              LGPLv2+
 URL:                  https://github.com/rpm-software-management/libdnf
@@ -103,7 +103,10 @@ Patch37:              0037-Add-filterUnneededExtraUserinstalled-and-Python-vers.
 Patch38:              0038-Describe-all-problems-even-when-there-are-protected-.patch
 Patch39:              0039-Clearer-error-for-protected-package-broken-dependenc.patch
 Patch40:              0040-Goal-set-protected-as-userinstalled-only-for-the-tem.patch
-Patch41:              9999-change-bugtracker.diff
+Patch41:              0041-swig-Add-missing-template-for-std-vector-Transaction.patch
+# https://github.com/rpm-software-management/libdnf/commit/4d4ee6788aa5c83eb232479766746d6345b5f5e5
+Patch42:              0042-advisory-filter-non-modular-collections-by-module_ex.patch
+Patch43:              9999-change-bugtracker.diff
 
 
 BuildRequires:        cmake
@@ -353,8 +356,15 @@ popd
 %endif
 
 %changelog
-* Tue May 19 2026 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
+* Tue Nov 10 2026 Release Engineering <releng@openela.org> - %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
 - Add OpenELA bugtracker
+
+* Tue Jun 23 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 0.69.0-20
+- Filter non-modular advisory collections against module_excludes
+  (RHEL-80156)
+
+* Wed May 20 2026 Evan Goode <egoode@redhat.com> - 0.69.0-19
+- swig: Add missing %template for std::vector<TransactionPersistence> (RHEL-154734)
 
 * Mon Feb 09 2026 Ales Matej <amatej@redhat.com> - 0.69.0-18
 - Fix a crash when parsing multiple key files fails (RHEL-145618)

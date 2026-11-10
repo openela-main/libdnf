@@ -1,0 +1,393 @@
+From e79686096aa4e3ce6ff0386fd7683846c4f14472 Mon Sep 17 00:00:00 2001
+From: Marek Blaha <mblaha@redhat.com>
+Date: Wed, 3 Jun 2026 15:53:33 +0000
+Subject: [PATCH] advisory: filter non-modular collections by module_excludes
+
+Advisory::getApplicablePackages() only checks <module> tags to determine
+collection applicability. Collections without a <module> tag are always
+treated as applicable, even when their packages are excluded from the
+sack by modular filtering. This causes 'dnf updateinfo list' to show
+non-modular advisories for packages governed by an active module stream.
+
+Check non-modular collections against the already-computed
+module_excludes bitmap. If a collection package's NEVRA matches
+a solvable in module_excludes, the collection is not applicable.
+
+Resolves: https://issues.redhat.com/browse/RHEL-80156
+
+Signed-off-by: Marek Blaha <mblaha@redhat.com>
+---
+ .../repodata/filelists.xml                    |  9 +++
+ .../repodata/modules.yaml                     | 23 +++++++
+ .../repodata/other.xml                        |  9 +++
+ .../repodata/primary.xml                      | 53 ++++++++++++++++
+ .../repodata/repomd.xml                       | 44 +++++++++++++
+ .../repodata/updateinfo.xml                   | 21 +++++++
+ libdnf/sack/advisory.cpp                      | 36 +++++++++++
+ tests/libdnf/sack/AdvisoryTest.cpp            | 62 +++++++++++++++++++
+ tests/libdnf/sack/AdvisoryTest.hpp            |  2 +
+ 9 files changed, 259 insertions(+)
+ create mode 100644 data/tests/advisory-nonmodular-for-modular-pkg/repodata/filelists.xml
+ create mode 100644 data/tests/advisory-nonmodular-for-modular-pkg/repodata/modules.yaml
+ create mode 100644 data/tests/advisory-nonmodular-for-modular-pkg/repodata/other.xml
+ create mode 100644 data/tests/advisory-nonmodular-for-modular-pkg/repodata/primary.xml
+ create mode 100644 data/tests/advisory-nonmodular-for-modular-pkg/repodata/repomd.xml
+ create mode 100644 data/tests/advisory-nonmodular-for-modular-pkg/repodata/updateinfo.xml
+
+diff --git a/data/tests/advisory-nonmodular-for-modular-pkg/repodata/filelists.xml b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/filelists.xml
+new file mode 100644
+index 00000000..95c24a59
+--- /dev/null
++++ b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/filelists.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<filelists xmlns="http://linux.duke.edu/metadata/filelists" packages="2">
++<package pkgid="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" name="test-perl-DBI" arch="x86_64">
++  <version epoch="0" ver="1" rel="2.el9"/>
++</package>
++<package pkgid="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" name="test-perl-DBI" arch="x86_64">
++  <version epoch="0" ver="1" rel="2.module_el8+6587+9879afr5"/>
++</package>
++</filelists>
+diff --git a/data/tests/advisory-nonmodular-for-modular-pkg/repodata/modules.yaml b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/modules.yaml
+new file mode 100644
+index 00000000..b27bd30f
+--- /dev/null
++++ b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/modules.yaml
+@@ -0,0 +1,23 @@
++---
++document: modulemd
++version: 2
++data:
++  name: perl-DBI
++  stream: "master"
++  version: 2
++  context: 2b
++  arch: x86_64
++  summary: Perl-DBI
++  description: >-
++    Perl-DBI
++  license:
++    module:
++    - MIT
++  profiles:
++    default:
++      rpms:
++      - test-perl-DBI
++  artifacts:
++    rpms:
++    - test-perl-DBI-0:1-2.module_el8+6587+9879afr5.x86_64
++...
+diff --git a/data/tests/advisory-nonmodular-for-modular-pkg/repodata/other.xml b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/other.xml
+new file mode 100644
+index 00000000..eb87a931
+--- /dev/null
++++ b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/other.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<otherdata xmlns="http://linux.duke.edu/metadata/other" packages="2">
++<package pkgid="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" name="test-perl-DBI" arch="x86_64">
++  <version epoch="0" ver="1" rel="2.el9"/>
++</package>
++<package pkgid="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" name="test-perl-DBI" arch="x86_64">
++  <version epoch="0" ver="1" rel="2.module_el8+6587+9879afr5"/>
++</package>
++</otherdata>
+diff --git a/data/tests/advisory-nonmodular-for-modular-pkg/repodata/primary.xml b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/primary.xml
+new file mode 100644
+index 00000000..534e3a5e
+--- /dev/null
++++ b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/primary.xml
+@@ -0,0 +1,53 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="2">
++<package type="rpm">
++  <name>test-perl-DBI</name>
++  <arch>x86_64</arch>
++  <version epoch="0" ver="1" rel="2.el9"/>
++  <checksum type="sha256" pkgid="YES">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</checksum>
++  <summary>testpkg Package</summary>
++  <description>Non-modular test-perl-DBI package</description>
++  <packager></packager>
++  <url></url>
++  <time file="1620046385" build="1585914063"/>
++  <size package="6084" installed="0" archive="124"/>
++  <location href="test-perl-DBI-1-2.el9.x86_64.rpm"/>
++  <format>
++    <rpm:license>MIT</rpm:license>
++    <rpm:vendor></rpm:vendor>
++    <rpm:group>System Environment/Base</rpm:group>
++    <rpm:buildhost>localhost</rpm:buildhost>
++    <rpm:sourcerpm>test-perl-DBI-1-2.el9.src.rpm</rpm:sourcerpm>
++    <rpm:header-range start="4504" end="6040"/>
++    <rpm:provides>
++      <rpm:entry name="test-perl-DBI" flags="EQ" epoch="0" ver="1" rel="2.el9"/>
++      <rpm:entry name="test-perl-DBI(x86-64)" flags="EQ" epoch="0" ver="1" rel="2.el9"/>
++    </rpm:provides>
++  </format>
++</package>
++<package type="rpm">
++  <name>test-perl-DBI</name>
++  <arch>x86_64</arch>
++  <version epoch="0" ver="1" rel="2.module_el8+6587+9879afr5"/>
++  <checksum type="sha256" pkgid="YES">bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb</checksum>
++  <summary>testpkg Package</summary>
++  <description>Modular test-perl-DBI package</description>
++  <packager></packager>
++  <url></url>
++  <time file="1620046385" build="1585914212"/>
++  <size package="6084" installed="0" archive="124"/>
++  <location href="test-perl-DBI-1-2.module_el8+6587+9879afr5.x86_64.rpm"/>
++  <format>
++    <rpm:license>MIT</rpm:license>
++    <rpm:vendor></rpm:vendor>
++    <rpm:group>System Environment/Base</rpm:group>
++    <rpm:buildhost>localhost</rpm:buildhost>
++    <rpm:sourcerpm>test-perl-DBI-1-2.module_el8+6587+9879afr5.src.rpm</rpm:sourcerpm>
++    <rpm:header-range start="4504" end="6040"/>
++    <rpm:provides>
++      <rpm:entry name="test-perl-DBI" flags="EQ" epoch="0" ver="1" rel="2.module_el8+6587+9879afr5"/>
++      <rpm:entry name="test-perl-DBI(x86-64)" flags="EQ" epoch="0" ver="1" rel="2.module_el8+6587+9879afr5"/>
++    </rpm:provides>
++  </format>
++</package>
++</metadata>
+diff --git a/data/tests/advisory-nonmodular-for-modular-pkg/repodata/repomd.xml b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/repomd.xml
+new file mode 100644
+index 00000000..1bffd844
+--- /dev/null
++++ b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/repomd.xml
+@@ -0,0 +1,44 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<repomd xmlns="http://linux.duke.edu/metadata/repo" xmlns:rpm="http://linux.duke.edu/metadata/rpm">
++  <revision>1700000000</revision>
++  <data type="primary">
++    <checksum type="sha256">7696ee2ac469dbb6c534f7ff1cae57c335b657a024f1b4fab401b6fa1d4a73db</checksum>
++    <open-checksum type="sha256">7696ee2ac469dbb6c534f7ff1cae57c335b657a024f1b4fab401b6fa1d4a73db</open-checksum>
++    <location href="repodata/primary.xml"/>
++    <timestamp>1700000000</timestamp>
++    <size>2345</size>
++    <open-size>2345</open-size>
++  </data>
++  <data type="filelists">
++    <checksum type="sha256">0f12a94d5ede8c9abc888b9622d304dc65a69a77d4dd0bf890559d9fba624c45</checksum>
++    <open-checksum type="sha256">0f12a94d5ede8c9abc888b9622d304dc65a69a77d4dd0bf890559d9fba624c45</open-checksum>
++    <location href="repodata/filelists.xml"/>
++    <timestamp>1700000000</timestamp>
++    <size>491</size>
++    <open-size>491</open-size>
++  </data>
++  <data type="other">
++    <checksum type="sha256">25ceecb3b0f641ef8cab6bae4c0008a44c72855ba2c8b3ec8ad3a870292e3dea</checksum>
++    <open-checksum type="sha256">25ceecb3b0f641ef8cab6bae4c0008a44c72855ba2c8b3ec8ad3a870292e3dea</open-checksum>
++    <location href="repodata/other.xml"/>
++    <timestamp>1700000000</timestamp>
++    <size>487</size>
++    <open-size>487</open-size>
++  </data>
++  <data type="modules">
++    <checksum type="sha256">706bc241db05ffa580be0cbd0d80a4b4dfa2dae62adc06ed484d8bee5723dba0</checksum>
++    <open-checksum type="sha256">706bc241db05ffa580be0cbd0d80a4b4dfa2dae62adc06ed484d8bee5723dba0</open-checksum>
++    <location href="repodata/modules.yaml"/>
++    <timestamp>1700000000</timestamp>
++    <size>346</size>
++    <open-size>346</open-size>
++  </data>
++  <data type="updateinfo">
++    <checksum type="sha256">f58cc48119e480727253f6c6805b629b8912883aa564c483b75ae798dd40900c</checksum>
++    <open-checksum type="sha256">f58cc48119e480727253f6c6805b629b8912883aa564c483b75ae798dd40900c</open-checksum>
++    <location href="repodata/updateinfo.xml"/>
++    <timestamp>1700000000</timestamp>
++    <size>872</size>
++    <open-size>872</open-size>
++  </data>
++</repomd>
+diff --git a/data/tests/advisory-nonmodular-for-modular-pkg/repodata/updateinfo.xml b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/updateinfo.xml
+new file mode 100644
+index 00000000..14142e48
+--- /dev/null
++++ b/data/tests/advisory-nonmodular-for-modular-pkg/repodata/updateinfo.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<updates>
++  <update from="secresponseteam@foo.bar" status="final" type="security" version="1">
++    <id>RHSA-2026:0001</id>
++    <title>test-perl-DBI security update</title>
++    <issued date="2026-01-01 00:00:00"/>
++    <updated date="2026-01-01 00:00:00"/>
++    <severity>Important</severity>
++    <rights>Copyright 2026</rights>
++    <summary>A security fix for test-perl-DBI</summary>
++    <description>Non-modular advisory for a package governed by a module</description>
++    <pkglist>
++      <collection short="non-modular-collection">
++        <name>Non-modular component</name>
++        <package name="test-perl-DBI" version="1" release="2.el9" epoch="0" arch="x86_64" src="http://www.foo.org">
++          <filename>test-perl-DBI-1-2.el9.x86_64.rpm</filename>
++        </package>
++      </collection>
++    </pkglist>
++  </update>
++</updates>
+diff --git a/libdnf/sack/advisory.cpp b/libdnf/sack/advisory.cpp
+index 05f74384..a884332e 100644
+--- a/libdnf/sack/advisory.cpp
++++ b/libdnf/sack/advisory.cpp
+@@ -19,6 +19,7 @@
+  */
+ 
+ #include <assert.h>
++#include <memory>
+ 
+ #include <solv/repo.h>
+ 
+@@ -160,14 +161,17 @@ Advisory::getApplicablePackages(std::vector<AdvisoryPkg> & pkglist, bool withFil
+     Dataiterator di;
+     Dataiterator di_inner;
+     Pool *pool = dnf_sack_get_pool(sack);
++    std::unique_ptr<PackageSet> moduleExcludes(dnf_sack_get_module_excludes(sack));
+ 
+     dataiterator_init(&di, pool, 0, advisory, UPDATE_COLLECTIONLIST, 0, 0);
+     while (dataiterator_step(&di)) {
+         dataiterator_setpos(&di);
+ 
+         bool isModuleCollectionApplicable = true;
++        bool hasModuleMetadata = false;
+         dataiterator_init(&di_inner, pool, 0, SOLVID_POS, UPDATE_MODULE, 0, 0);
+         while (dataiterator_step(&di_inner)) {
++            hasModuleMetadata = true;
+             dataiterator_setpos(&di_inner);
+             Id name = pool_lookup_id(pool, SOLVID_POS, UPDATE_MODULE_NAME);
+             Id stream = pool_lookup_id(pool, SOLVID_POS, UPDATE_MODULE_STREAM);
+@@ -184,6 +188,38 @@ Advisory::getApplicablePackages(std::vector<AdvisoryPkg> & pkglist, bool withFil
+         }
+         dataiterator_free(&di_inner);
+ 
++        if (!hasModuleMetadata && moduleExcludes) {
++            // Collection has no <module> tag — check whether any of its
++            // packages have been excluded by modular filtering.  If so the
++            // collection is a non-modular advisory for a package whose name
++            // is governed by an active module stream and should not be shown.
++            dataiterator_setpos(&di);
++            dataiterator_init(&di_inner, pool, 0, SOLVID_POS, UPDATE_COLLECTION, 0, 0);
++            while (dataiterator_step(&di_inner)) {
++                dataiterator_setpos(&di_inner);
++                Id name = pool_lookup_id(pool, SOLVID_POS, UPDATE_COLLECTION_NAME);
++                Id evr = pool_lookup_id(pool, SOLVID_POS, UPDATE_COLLECTION_EVR);
++                Id arch = pool_lookup_id(pool, SOLVID_POS, UPDATE_COLLECTION_ARCH);
++                if (name) {
++                    Id p, pp;
++                    FOR_PROVIDES(p, pp, name) {
++                        Solvable *s = pool_id2solvable(pool, p);
++                        if (s->name == name && s->evr == evr && s->arch == arch
++                            && moduleExcludes->has(p)) {
++                            // Non-modular collection references a package
++                            // whose exact NEVRA is module-excluded.
++                            isModuleCollectionApplicable = false;
++                            break;
++                        }
++                    }
++                }
++                if (!isModuleCollectionApplicable) {
++                    break;
++                }
++            }
++            dataiterator_free(&di_inner);
++        }
++
+         if (isModuleCollectionApplicable) {
+             const char * filename = nullptr;
+             dataiterator_setpos(&di);
+diff --git a/tests/libdnf/sack/AdvisoryTest.cpp b/tests/libdnf/sack/AdvisoryTest.cpp
+index 43d90fc9..18b21892 100644
+--- a/tests/libdnf/sack/AdvisoryTest.cpp
++++ b/tests/libdnf/sack/AdvisoryTest.cpp
+@@ -146,3 +146,65 @@ void AdvisoryTest::testGetReferences()
+     advisory->getReferences(refsvector);
+     CPPUNIT_ASSERT(refsvector.size() == 2);
+ }
++
++void AdvisoryTest::testNonModularAdvisoryFiltering()
++{
++    g_autoptr(GError) error = nullptr;
++
++    // Create a separate sack with test data containing:
++    // - a non-modular package test-perl-DBI-0:1-2.el9.x86_64
++    // - a modular package test-perl-DBI-0:1-2.module_el8+6587+9879afr5.x86_64
++    // - module perl-DBI:master with the modular package as artifact
++    // - advisory RHSA-2026:0001 with a non-modular collection referencing the non-modular package
++    DnfSack *testSack = dnf_sack_new();
++    char *testTmpdir = g_strdup("/tmp/libdnfAdvNonModXXXXXX");
++    char *retptr = mkdtemp(testTmpdir);
++    CPPUNIT_ASSERT(retptr);
++    dnf_sack_set_cachedir(testSack, testTmpdir);
++    dnf_sack_set_arch(testSack, "x86_64", NULL);
++    dnf_sack_setup(testSack, 0, NULL);
++
++    HyRepo testRepo = hy_repo_create("test_nonmodular_advisory_repo");
++    std::string repodata = std::string(TESTDATADIR "/advisory-nonmodular-for-modular-pkg/repodata/");
++    hy_repo_set_string(testRepo, HY_REPO_MD_FN, (repodata + "repomd.xml").c_str());
++    hy_repo_set_string(testRepo, HY_REPO_PRIMARY_FN, (repodata + "primary.xml").c_str());
++    hy_repo_set_string(testRepo, HY_REPO_UPDATEINFO_FN, (repodata + "updateinfo.xml").c_str());
++    hy_repo_set_string(testRepo, MODULES_FN, (repodata + "modules.yaml").c_str());
++    dnf_sack_load_repo(testSack, testRepo, DNF_SACK_LOAD_FLAG_USE_UPDATEINFO, &error);
++    CPPUNIT_ASSERT(!error);
++
++    // Load module metadata but don't enable any module yet
++    dnf_sack_filter_modules_v2(testSack, nullptr, nullptr, testTmpdir, "platform_id:f33", false, false, false);
++
++    // With no module enabled, the non-modular advisory should be applicable.
++    // Use getAdvisoryPkgs to discover the advisory and verify the package is returned.
++    HyQuery query = new libdnf::Query(testSack);
++    std::vector<libdnf::AdvisoryPkg> advisoryPkgs;
++    query->getAdvisoryPkgs(HY_EQ, advisoryPkgs);
++    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), advisoryPkgs.size());
++
++    // Get the Advisory object for direct getApplicablePackages testing
++    libdnf::Advisory *adv = advisoryPkgs[0].getAdvisory();
++    std::vector<libdnf::AdvisoryPkg> applicablePkgs;
++    adv->getApplicablePackages(applicablePkgs);
++    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), applicablePkgs.size());
++
++    // Now enable perl-DBI:master and apply modular filtering
++    libdnf::ModulePackageContainer *testModules = dnf_sack_get_module_container(testSack);
++    CPPUNIT_ASSERT(testModules);
++    CPPUNIT_ASSERT(testModules->enable("perl-DBI", "master", false));
++    dnf_sack_filter_modules_v2(testSack, testModules, nullptr, testTmpdir, nullptr, true, false, false);
++
++    // With the module active, the non-modular collection should be filtered out
++    applicablePkgs.clear();
++    adv->getApplicablePackages(applicablePkgs);
++    CPPUNIT_ASSERT(applicablePkgs.empty());
++
++    delete adv;
++    delete query;
++
++    dnf_remove_recursive_v2(testTmpdir, NULL);
++    delete testRepo;
++    g_object_unref(testSack);
++    g_free(testTmpdir);
++}
+diff --git a/tests/libdnf/sack/AdvisoryTest.hpp b/tests/libdnf/sack/AdvisoryTest.hpp
+index cb0d8c05..3fc4e046 100644
+--- a/tests/libdnf/sack/AdvisoryTest.hpp
++++ b/tests/libdnf/sack/AdvisoryTest.hpp
+@@ -24,6 +24,7 @@ class AdvisoryTest : public CppUnit::TestCase
+         CPPUNIT_TEST(testGetApplicablePackagesMultipleApplicableCollections);
+         CPPUNIT_TEST(testGetModules);
+         CPPUNIT_TEST(testGetReferences);
++        CPPUNIT_TEST(testNonModularAdvisoryFiltering);
+     CPPUNIT_TEST_SUITE_END();
+ 
+ public:
+@@ -42,6 +43,7 @@ public:
+     void testGetApplicablePackagesMultipleApplicableCollections();
+     void testGetModules();
+     void testGetReferences();
++    void testNonModularAdvisoryFiltering();
+ 
+ private:
+     DnfContext *context = nullptr;
+-- 
+2.52.0
+
