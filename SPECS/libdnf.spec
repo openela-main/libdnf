@@ -56,7 +56,7 @@
 
 Name:           libdnf
 Version:        %{libdnf_major_version}.%{libdnf_minor_version}.%{libdnf_micro_version}
-Release:        15%{?dist}
+Release:        17%{?dist}
 Summary:        Library providing simplified C and Python API to libsolv
 License:        LGPL-2.1-or-later
 URL:            https://github.com/rpm-software-management/libdnf
@@ -91,6 +91,8 @@ Patch27:        0027-Log-identifiers-of-keys-imported-by-dnf_keyring_add_.patch
 Patch28:        0028-Fix-dnf_keyring_add_public_key-to-add-all-keys-from-.patch
 Patch29:        0029-Fix-dnf_keyring_add_public_key-to-add-keys-from-all-.patch
 Patch30:        0030-Fix-formatting-error-messages-when-importing-subkeys.patch
+Patch31:        0031-swig-Add-missing-template-for-std-vector-Transaction.patch
+Patch32:        0032-context-automatically-setup-arch-variable.patch
 
 BuildRequires:  cmake
 BuildRequires:  gcc
@@ -334,6 +336,14 @@ popd
 %endif
 
 %changelog
+* Wed Jun 10 2026 Ales Matej <amatej@redhat.com> - 0.73.1-17
+- context libdnf (microdnf): automatically set and substitute $arch variable
+  (RHEL-80370)
+
+* Wed Apr 22 2026 Evan Goode <egoode@redhat.com> - 0.73.1-16
+- swig: Add missing %template for std::vector<TransactionPersistence>
+  (RHEL-154736)
+
 * Mon Apr 13 2026 Petr Pisar <ppisar@redhat.com> - 0.73.1-15
 - Fix dnf_keyring_add_public_key() to add multiple keys from a single file
   (RHEL-156063)
